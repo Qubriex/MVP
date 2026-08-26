@@ -53,7 +53,7 @@ export default function CapabilityTargetUpload() {
       <div style={styles.container}>
         <div style={styles.back} onClick={() => navigate('/institution/dashboard')}>← Back to Dashboard</div>
         <h1 style={styles.h1}>Upload Capability Target</h1>
-        <p style={styles.sub}>Tell Vak what to build. Any format accepted.</p>
+        <p style={styles.sub}>Tell Professor Qubirex what to build. Any format accepted.</p>
 
         <div style={styles.pathTabs}>
           <button style={{ ...styles.tab, ...(path === 'B' ? styles.tabActive : {}) }} onClick={() => setPath('B')}>
@@ -77,7 +77,7 @@ export default function CapabilityTargetUpload() {
             </label>
             {path === 'B' && (
               <div style={styles.pathBHint}>
-                🤖 Vak's AI will extract the capability targets and return a structured summary for your confirmation before instruction begins.
+                🤖 Professor Qubirex's AI will extract the capability targets and return a structured summary for your confirmation before instruction begins.
               </div>
             )}
             <textarea style={styles.textarea} value={rawInput} onChange={e => setRawInput(e.target.value)}

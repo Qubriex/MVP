@@ -1,4 +1,4 @@
-// api/routes/admin.js
+// api/routes/admin.js — Inferexaa admin portal (Qubirex platform)
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
@@ -7,6 +7,21 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 const { getMasteryLog } = require('../../core/masteryLog');
 
 const router = express.Router();
+
+// ─── Seed initial admin — public, gated by JWT_SECRET, not a token ────────────
+// Must be registered before the auth middleware below: this is how the very
+// first admin account gets created, so it cannot itself require an admin token.
+router.post('/seed-admin', (req, res) => {
+  const { email, password, secret } = req.body;
+  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'Invalid secret' });
+  const db = getDb();
+  const id = uuidv4();
+  const hash = bcrypt.hashSync(password, 10);
+  db.prepare('INSERT OR IGNORE INTO admin_users (id, email, password_hash, name) VALUES (?, ?, ?, ?)').run(id, email, hash, 'Admin');
+  db.close();
+  res.json({ message: 'Admin created' });
+});
+
 router.use(authenticateToken);
 router.use(requireRole('admin'));
 
@@ -68,29 +83,17 @@ router.get('/quality-report', (req, res) => {
   `).all();
 
   const loopStats = db.prepare(`
-    SELECT explanation_approach, COUNT(*) as usage_count,
+    SELECT current_approach, COUNT(*) as usage_count,
       AVG(loop_count) as avg_loops
-    FROM learning_sessions GROUP BY explanation_approach
+    FROM learning_sessions GROUP BY current_approach
   `).all();
 
   db.close();
   res.json({
     node_difficulty_ranking: nodeStats,
     approach_effectiveness: loopStats,
-    note: 'High avg_attempts on a node = potential explanation architecture issue, not learner failure'
+    note: 'High avg_attempts on a node signals a potential explanation-architecture issue, not learner failure'
   });
-});
-
-// ─── Seed initial admin ───────────────────────────────────────────────────────
-router.post('/seed-admin', (req, res) => {
-  const { email, password, secret } = req.body;
-  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'Invalid secret' });
-  const db = getDb();
-  const id = uuidv4();
-  const hash = bcrypt.hashSync(password, 10);
-  db.prepare('INSERT OR IGNORE INTO admin_users (id, email, password_hash, name) VALUES (?, ?, ?, ?)').run(id, email, hash, 'Admin');
-  db.close();
-  res.json({ message: 'Admin created' });
 });
 
 module.exports = router;

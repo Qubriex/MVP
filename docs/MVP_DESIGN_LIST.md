@@ -1,6 +1,6 @@
-# VAK MVP — COMPLETE DESIGN LIST
+# QUBIREX MVP — COMPLETE DESIGN LIST
 
-**Vak AI Technologies · March 2026 · Confidential**
+**Inferexaa Private Limited · Qubirex · Confidential**
 
 ---
 
@@ -25,7 +25,7 @@
 - [ ] Foundational nodes precede applied nodes
 - [ ] Prerequisite relationships respected
 - [ ] Difficulty progression set against target proficiency level
-- [ ] Pathway is Vak's internal operating plan — not shared with institution
+- [ ] Pathway is Qubirex's internal operating plan — not shared with institution
 
 ---
 
@@ -41,7 +41,7 @@
 ### 2.2 Adaptive Branching
 - [ ] ADVANCE decision: mastery check passes threshold — move to next node
 - [ ] LOOP decision: mastery check fails — new approach, not same explanation
-- [ ] 5 explanation approaches available per node: native_concept, analogy, worked_example, decomposition, simplified
+- [ ] 5 explanation approaches available per node: native_concept, analogy, worked_example, decomposition, socratic
 - [ ] Loop count logged per node per learner
 - [ ] High loop count = signal about explanation architecture, not learner failure
 - [ ] No hard loop limit at MVP — continues until mastery confirmed
@@ -53,7 +53,7 @@
 | analogy | One powerful everyday analogy from learner's actual life |
 | worked_example | Complete worked example BEFORE abstract concept |
 | decomposition | Identify and teach missing prerequisite micro-skill |
-| simplified | Strip to minimum, one concept, rebuild from scratch |
+| socratic | Ask questions that guide the learner to the concept through their own reasoning |
 
 ### 2.4 Session Management
 - [ ] Session started per learner per skill node
@@ -96,14 +96,14 @@
 | Field | Status | Owner |
 |---|---|---|
 | learner_reference | Always populated | Shared |
-| capability_target_document_reference | Always populated | Vak |
-| cluster_covered | Always populated (institution's labels) | Vak produces |
-| skill_node | Always populated | Vak (proprietary) |
-| mastery_attainment (%) | Always populated | Vak (proprietary) |
-| time_to_mastery_minutes | Always populated | Vak (proprietary) |
-| attempt_count | Always populated | Vak (proprietary) |
-| confidence_indicator | Always populated | Vak (proprietary) |
-| simulation_readiness_flag | Always populated | Vak signal |
+| capability_target_document_reference | Always populated | Qubirex |
+| cluster_covered | Always populated (institution's labels) | Qubirex produces |
+| skill_node | Always populated | Qubirex (proprietary) |
+| mastery_attainment (%) | Always populated | Qubirex (proprietary) |
+| time_to_mastery_minutes | Always populated | Qubirex (proprietary) |
+| attempt_count | Always populated | Qubirex (proprietary) |
+| confidence_indicator | Always populated | Qubirex (proprietary) |
+| simulation_readiness_flag | Always populated | Qubirex signal |
 | **readiness_classification** | **ALWAYS BLANK** | **Institution only** |
 | **external_score** | **ALWAYS BLANK** | **Assessment platform only** |
 
@@ -113,7 +113,7 @@
 - **Simulation Readiness**: Binary flag — all nodes mastered + avg mastery ≥ 75% + avg confidence ≥ 60%
 
 ### 4.3 Boundary Statement
-Every Mastery Log includes: *"This Mastery Log records capability movement and instruction evidence only. Readiness classification and external scoring are owned by the commissioning institution and are not populated by Vak AI Technologies under any circumstances."*
+Every Mastery Log includes: *"This Mastery Log records capability movement and instruction evidence only. Readiness classification and external scoring are owned by the commissioning institution and are not populated by Qubirex under any circumstances."*
 
 ---
 
@@ -161,7 +161,7 @@ Every Mastery Log includes: *"This Mastery Log records capability movement and i
 
 ### 6.3 Learning Session Interface
 - [ ] Chat-based instruction in native language
-- [ ] AI messages clearly labelled (VAK)
+- [ ] AI messages clearly labelled (PROFESSOR QUBIREX)
 - [ ] Approach badge visible (shows current explanation method)
 - [ ] Loop counter visible when > 0
 - [ ] Language badge always visible
@@ -174,7 +174,7 @@ Every Mastery Log includes: *"This Mastery Log records capability movement and i
 
 ## MODULE 7 — DATA ARCHITECTURE
 
-### 7.1 Proprietary Data (Vak only)
+### 7.1 Proprietary Data (Qubirex only)
 - Full session interaction logs (`session_messages`)
 - Mastery check evaluation details (`mastery_checks`)
 - Advance/loop decision reasoning
@@ -182,7 +182,7 @@ Every Mastery Log includes: *"This Mastery Log records capability movement and i
 - Internal skill node graph
 
 ### 7.2 Shared Data
-- Mastery Log (produced by Vak, used by institution)
+- Mastery Log (produced by Qubirex, used by institution)
 - Learner reference (institution's own ID, used in log)
 
 ### 7.3 Institution-Only Data
@@ -223,7 +223,7 @@ Every Mastery Log includes: *"This Mastery Log records capability movement and i
 | Full multi-language beyond Hindi/Telugu | Validate one language before adding breadth |
 | Consumer / direct-to-learner channel | Requires Default Capability Target Library (not built yet) |
 | Path B full AI automation | Process must be proven manually before automated |
-| Institutional readiness dashboards | These show readiness — Vak doesn't frame evidence as readiness |
+| Institutional readiness dashboards | These show readiness — Qubirex doesn't frame evidence as readiness |
 | Native LMS API integrations | Scaling feature — build after engine is validated |
 | Voice-based instruction | Month 12 target |
 | Personal capability portfolio | Month 9 target |
@@ -246,4 +246,4 @@ Every Mastery Log includes: *"This Mastery Log records capability movement and i
 
 ---
 
-*Vak AI Technologies · Strictly Confidential · MVP Design List v1.0 · March 2026*
+*Inferexaa Private Limited · Qubirex · Strictly Confidential · MVP Design List v2.0*

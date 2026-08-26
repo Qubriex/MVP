@@ -21,8 +21,8 @@ export default function MasteryLogView() {
   if (loading) return <div style={{ color: '#94A3B8', padding: 40, fontFamily: 'Arial' }}>Loading…</div>;
   if (!log) return <div style={{ color: '#FCA5A5', padding: 40, fontFamily: 'Arial' }}>Log not found</div>;
 
-  const confPct = (v) => v !== null && v !== undefined ? `${Math.round(v * 100)}%` : '—';
-  const mastery_to_bar = (v) => v || 0;
+  const clustersCompleted = (log.clusters || []).filter(c => c.nodes.length > 0 && c.nodes.every(n => n.advanced)).length;
+  const overallCompletion = log.clusters?.length ? Math.round((clustersCompleted / log.clusters.length) * 100) : 0;
 
   return (
     <div style={S.page}>
@@ -32,24 +32,23 @@ export default function MasteryLogView() {
         {/* Header */}
         <div style={S.logHeader}>
           <div>
-            <div style={S.docType}>VAK MASTERY LOG</div>
+            <div style={S.docType}>QUBIREX MASTERY LOG</div>
             <h1 style={S.learnerName}>{log.learner_name}</h1>
             <div style={S.meta}>
-              {log.capability_target_document_reference} ·&nbsp;
+              {log.capability_target_reference} ·&nbsp;
               {log.language_of_instruction === 'hindi' ? 'हिंदी' : 'తెలుగు'} ·&nbsp;
               Produced {new Date(log.produced_at).toLocaleDateString('en-IN')}
             </div>
           </div>
           <div style={S.overallBox}>
-            <div style={S.overallPct}>{log.overall_completion}%</div>
+            <div style={S.overallPct}>{overallCompletion}%</div>
             <div style={S.overallLabel}>Programme Complete</div>
           </div>
         </div>
 
-        <div style={S.institution}>Institution: {log.institution}</div>
+        <div style={S.institution}>Engagement: {log.engagement_title}</div>
         <div style={S.refRow}>
           <span style={S.refLabel}>Learner Ref:</span> <span style={S.refVal}>{log.learner_reference}</span>
-          <span style={{ ...S.refLabel, marginLeft: 24 }}>Engagement:</span> <span style={S.refVal}>{log.engagement_id?.slice(0, 8)}…</span>
         </div>
 
         {/* Clusters */}
@@ -63,11 +62,11 @@ export default function MasteryLogView() {
               <div style={S.clusterMeta}>
                 <div style={S.metaItem}>
                   <span style={S.metaLabel}>Nodes Mastered</span>
-                  <span style={S.metaVal}>{cluster.nodes_mastered}/{cluster.nodes_total}</span>
+                  <span style={S.metaVal}>{cluster.nodes.filter(n => n.advanced).length}/{cluster.nodes.length}</span>
                 </div>
                 <div style={S.metaItem}>
                   <span style={S.metaLabel}>Avg Mastery</span>
-                  <span style={S.metaVal}>{cluster.average_mastery_attainment ?? '—'}%</span>
+                  <span style={S.metaVal}>{cluster.cluster_mastery_average ?? '—'}%</span>
                 </div>
                 <div style={S.metaItem}>
                   <span style={S.metaLabel}>Sim. Readiness</span>
@@ -100,7 +99,7 @@ export default function MasteryLogView() {
                 <span>Confidence</span>
                 <span>Status</span>
               </div>
-              {cluster.skill_nodes?.map((node, ni) => (
+              {cluster.nodes?.map((node, ni) => (
                 <div key={ni} style={S.nodeRow}>
                   <div style={S.nodeLabel}>{node.skill_node}</div>
                   <div style={S.nodeCell}>
@@ -111,9 +110,9 @@ export default function MasteryLogView() {
                   </div>
                   <div style={S.nodeCell}>{node.time_to_mastery_minutes ?? '—'}</div>
                   <div style={S.nodeCell}>{node.attempt_count}</div>
-                  <div style={S.nodeCell}>{node.confidence_indicator !== null ? `${Math.round((node.confidence_indicator || 0) * 100)}%` : '—'}</div>
-                  <div style={{ ...S.nodeCell, color: node.node_status === 'mastered' ? '#10B981' : '#F59E0B', fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>
-                    {node.node_status?.replace('_', ' ')}
+                  <div style={{ ...S.nodeCell, textTransform: 'capitalize' }}>{node.confidence_indicator}</div>
+                  <div style={{ ...S.nodeCell, color: node.advanced ? '#10B981' : '#F59E0B', fontSize: 12, fontWeight: 600, textTransform: 'capitalize' }}>
+                    {node.advanced ? 'mastered' : 'in progress'}
                   </div>
                 </div>
               ))}
@@ -122,8 +121,8 @@ export default function MasteryLogView() {
         ))}
 
         {/* Boundary statement */}
-        <div style={S.boundary}>{log.boundary_statement}</div>
-        <div style={S.footer}>Produced by Vak AI Technologies · Receive. Build. Return.</div>
+        <div style={S.boundary}>{log.qubirex_note}</div>
+        <div style={S.footer}>Produced by Qubirex · Inferexaa Private Limited · Receive. Build. Return.</div>
       </div>
     </div>
   );

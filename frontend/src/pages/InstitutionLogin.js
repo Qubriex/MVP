@@ -28,7 +28,7 @@ export default function InstitutionLogin() {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <div style={styles.logo}>VAK</div>
+        <div style={styles.logo}>QUBIREX</div>
         <h2 style={styles.title}>Institution Login</h2>
         <p style={styles.sub}>Commission capability builds for your learners</p>
         {error && <div style={styles.error}>{error}</div>}

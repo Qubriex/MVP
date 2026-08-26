@@ -4,7 +4,7 @@ import axios from 'axios';
 const api = axios.create({ baseURL: '/api' });
 
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('vak_token');
+  const token = localStorage.getItem('qubirex_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -13,9 +13,9 @@ api.interceptors.response.use(
   res => res,
   err => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('vak_token');
-      localStorage.removeItem('vak_user');
-      localStorage.removeItem('vak_role');
+      localStorage.removeItem('qubirex_token');
+      localStorage.removeItem('qubirex_user');
+      localStorage.removeItem('qubirex_role');
       window.location.href = '/login';
     }
     return Promise.reject(err);

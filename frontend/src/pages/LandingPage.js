@@ -7,7 +7,7 @@ export default function LandingPage() {
   return (
     <div style={styles.container}>
       <div style={styles.hero}>
-        <div style={styles.badge}>VAK AI TECHNOLOGIES</div>
+        <div style={styles.badge}>QUBIREX</div>
         <h1 style={styles.headline}>Receive. Build. Return.</h1>
         <p style={styles.sub}>
           Native-language AI instruction engine.<br/>

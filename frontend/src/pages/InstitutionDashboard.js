@@ -19,7 +19,7 @@ export default function InstitutionDashboard() {
   return (
     <div style={styles.page}>
       <nav style={styles.nav}>
-        <div style={styles.navLogo}>VAK</div>
+        <div style={styles.navLogo}>QUBIREX</div>
         <div style={styles.navRight}>
           <span style={styles.navName}>{user?.name}</span>
           <button style={styles.navBtn} onClick={() => navigate('/institution/upload-target')}>+ New Engagement</button>

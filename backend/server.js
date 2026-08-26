@@ -1,4 +1,4 @@
-// server.js — Vak AI Technologies Backend
+// server.js — Qubirex Backend (Inferexaa Private Limited)
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -21,7 +21,8 @@ app.use('/api/admin',       require('./api/routes/admin'));
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({
   status: 'ok',
-  service: 'Vak AI Technologies',
+  service: 'Qubirex',
+  company: 'Inferexaa Private Limited',
   tagline: 'Receive. Build. Return.',
   timestamp: new Date().toISOString()
 }));
@@ -35,6 +36,6 @@ app.use((err, req, res, next) => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 initDb();
 app.listen(PORT, () => {
-  console.log(`\n🟢 Vak Backend running on http://localhost:${PORT}`);
+  console.log(`\nQubirex backend running on http://localhost:${PORT}`);
   console.log(`   RECEIVE · BUILD · RETURN\n`);
 });

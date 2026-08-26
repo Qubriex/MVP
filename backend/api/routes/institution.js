@@ -1,9 +1,11 @@
-// api/routes/institution.js
+// api/routes/institution.js — Institution Portal
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../../db/init');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { extractCapabilityTargets, decomposeClusterToNodes } = require('../../core/instructionEngine');
+const currBrain = require('../../core/brains/currBrain');
+const { writeNodeSpec } = require('../../core/stores/briefStore');
+const { produceEngagementMasteryLogs } = require('../../core/masteryLog');
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -59,9 +61,9 @@ router.post('/learners/bulk', (req, res) => {
   res.status(201).json({ message: `${learners.length} learners processed` });
 });
 
-// ─── Upload / submit capability target ───────────────────────────────────────
+// ─── Upload / submit capability target (Path A / Path B) ─────────────────────
 router.post('/capability-targets', async (req, res) => {
-  const { title, path, raw_input, time_window_weeks, cohort_size } = req.body;
+  const { title, path, raw_input, language, time_window_weeks, cohort_size } = req.body;
   if (!raw_input) return res.status(400).json({ error: 'raw_input required' });
 
   const db = getDb();
@@ -77,19 +79,17 @@ router.post('/capability-targets', async (req, res) => {
     return res.status(201).json({ id, path: 'A', message: 'Capability target stored' });
   }
 
-  // Path B — AI extraction
+  // Path B — CURR brain extraction (RAG over confirmed past briefs)
   try {
-    const extracted = await extractCapabilityTargets(raw_input);
+    const extracted = await currBrain.extractCapabilityTargets({ rawInput: raw_input, language: language || 'telugu', institutionId: req.user.id });
     db.prepare(`
-      INSERT INTO capability_targets (id, institution_id, version, title, path, raw_input, extracted_targets, time_window_weeks, cohort_size)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO capability_targets (id, institution_id, version, title, path, domain, raw_input, extracted_targets, time_window_weeks, cohort_size)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, req.user.id, '1.0', title || extracted.title || 'Capability Target',
-      'B', raw_input, JSON.stringify(extracted), time_window_weeks, cohort_size);
+      'B', extracted.domain, raw_input, JSON.stringify(extracted), time_window_weeks, cohort_size);
     db.close();
     return res.status(201).json({
-      id,
-      path: 'B',
-      extraction: extracted,
+      id, path: 'B', extraction: extracted,
       message: 'Targets extracted. Please review and confirm before instruction begins.'
     });
   } catch (err) {
@@ -101,15 +101,24 @@ router.post('/capability-targets', async (req, res) => {
 // ─── Confirm Path B target ────────────────────────────────────────────────────
 router.post('/capability-targets/:id/confirm', (req, res) => {
   const db = getDb();
+  const ct = db.prepare('SELECT * FROM capability_targets WHERE id = ? AND institution_id = ?').get(req.params.id, req.user.id);
+  if (!ct) { db.close(); return res.status(404).json({ error: 'Not found' }); }
+
   db.prepare(`
     UPDATE capability_targets SET confirmed = 1, confirmed_at = datetime('now'), status = 'confirmed'
-    WHERE id = ? AND institution_id = ?
-  `).run(req.params.id, req.user.id);
+    WHERE id = ?
+  `).run(req.params.id);
   db.close();
+
+  // Confirming here also confirms CURR's brief-store template, so future
+  // extractions in this domain/language can use it as a RAG template.
+  const extracted = ct.extracted_targets ? JSON.parse(ct.extracted_targets) : null;
+  if (extracted && extracted.briefId) currBrain.confirmBrief(extracted.briefId);
+
   res.json({ message: 'Capability target confirmed. Instruction can now begin.' });
 });
 
-// ─── Build skill nodes from clusters (pathway design) ────────────────────────
+// ─── Build skill nodes from clusters (pathway design via CURR) ───────────────
 router.post('/capability-targets/:id/build-pathway', async (req, res) => {
   const { language } = req.body;
   const db = getDb();
@@ -119,39 +128,61 @@ router.post('/capability-targets/:id/build-pathway', async (req, res) => {
   const extracted = ct.extracted_targets ? JSON.parse(ct.extracted_targets) : null;
   const clusters = extracted ? extracted.clusters : [];
 
-  if (clusters.length === 0) { db.close(); return res.status(400).json({ error: 'No clusters found. Run extraction first.' }); }
+  if (!clusters || clusters.length === 0) { db.close(); return res.status(400).json({ error: 'No clusters found. Run extraction first.' }); }
 
   const insertCluster = db.prepare(`
-    INSERT OR IGNORE INTO skill_clusters (id, capability_target_id, cluster_label, cluster_ref, required_proficiency, mastery_threshold, priority, evidence_type, sequence_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO skill_clusters (id, capability_target_id, cluster_label, cluster_ref, description, required_proficiency, mastery_threshold, priority, evidence_type, estimated_hours, sequence_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertNode = db.prepare(`
-    INSERT OR IGNORE INTO skill_nodes (id, cluster_id, node_label, description, prerequisite_node_ids, sequence_order, difficulty_level, node_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO skill_nodes (id, cluster_id, node_label, description, prerequisite_node_ids, sequence_order, difficulty_level, node_type, phase, estimated_minutes, concept_tags, mastery_threshold)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const results = [];
   for (let i = 0; i < clusters.length; i++) {
     const c = clusters[i];
     const clusterId = uuidv4();
-    insertCluster.run(clusterId, ct.id, c.label, c.cluster_ref || null, c.required_proficiency, c.mastery_threshold || 0.75, c.priority || 'normal', c.evidence_type || null, i);
+    insertCluster.run(clusterId, ct.id, c.label, c.cluster_ref || null, c.description || null,
+      c.required_proficiency, c.mastery_threshold || 0.75, c.priority || 'normal', c.evidence_type || null,
+      c.estimated_hours || null, i);
 
     try {
-      const decomposed = await decomposeClusterToNodes({
+      const skillNodeIds = [];
+      // skillNodeIds intentionally omitted here — node ids don't exist yet.
+      // Node specs are written explicitly below, once they're minted.
+      const decomposed = await currBrain.decomposeClusterToNodes({
         clusterLabel: c.label,
         clusterDescription: c.description,
         proficiencyLevel: c.required_proficiency,
         language: language || 'telugu'
       });
 
-      const nodeIds = [];
-      for (let j = 0; j < decomposed.nodes.length; j++) {
-        const n = decomposed.nodes[j];
-        const nodeId = uuidv4();
-        nodeIds.push(nodeId);
-        const prereqIds = (n.prerequisite_indices || []).map(pi => nodeIds[pi]).filter(Boolean);
-        insertNode.run(nodeId, clusterId, n.label, n.description, JSON.stringify(prereqIds), j, n.difficulty_level || 1, n.node_type || 'concept');
-      }
+      // Mint node IDs first so prerequisite_indices and node specs can reference them.
+      for (let j = 0; j < decomposed.nodes.length; j++) skillNodeIds.push(uuidv4());
+
+      decomposed.nodes.forEach((n, j) => {
+        const prereqIds = (n.prerequisite_indices || []).map(pi => skillNodeIds[pi]).filter(Boolean);
+        insertNode.run(
+          skillNodeIds[j], clusterId, n.label, n.description, JSON.stringify(prereqIds), j,
+          n.difficulty_level || 1, n.node_type || 'concept', n.phase || 1,
+          n.estimated_minutes || 20, JSON.stringify(n.concept_tags || []), n.mastery_threshold ?? 0.70
+        );
+      });
+
+      // Write node specs now that skill_node ids exist — this is the CURR
+      // store TEACH retrieves from at SESSION_START.
+      decomposed.nodes.forEach((n, j) => {
+        writeNodeSpec(skillNodeIds[j], {
+          nodeLabel: n.label, clusterLabel: c.label,
+          learningObjectives: n.learning_objectives || [],
+          prerequisiteLabels: (n.prerequisite_indices || []).map(pi => decomposed.nodes[pi] ? decomposed.nodes[pi].label : null).filter(Boolean),
+          masteryThreshold: n.mastery_threshold ?? 0.70, phase: n.phase ?? 1,
+          difficultyLevel: n.difficulty_level ?? 1, estimatedMinutes: n.estimated_minutes ?? 20,
+          conceptTags: n.concept_tags || []
+        });
+      });
+
       results.push({ cluster: c.label, nodes_created: decomposed.nodes.length });
     } catch (err) {
       results.push({ cluster: c.label, error: err.message });
@@ -177,7 +208,6 @@ router.post('/engagements', (req, res) => {
     VALUES (?, ?, ?, ?, ?, 'active', datetime('now'))
   `).run(engId, req.user.id, capability_target_id, title || ct.title, language);
 
-  // Get first skill node for each learner
   const firstCluster = db.prepare('SELECT id FROM skill_clusters WHERE capability_target_id = ? ORDER BY sequence_order LIMIT 1').get(capability_target_id);
   const firstNode = firstCluster
     ? db.prepare('SELECT id FROM skill_nodes WHERE cluster_id = ? ORDER BY sequence_order LIMIT 1').get(firstCluster.id)
@@ -211,6 +241,8 @@ router.get('/engagements', (req, res) => {
 });
 
 // ─── Get engagement detail + cohort progress ──────────────────────────────────
+// NOTE: session_messages, doubts, study_plans, streaks, and learner_memory are
+// never surfaced here — only cohort-level structural progress.
 router.get('/engagements/:id', (req, res) => {
   const db = getDb();
   const engagement = db.prepare(`
@@ -235,7 +267,6 @@ router.get('/engagements/:id', (req, res) => {
 
 // ─── Produce Mastery Logs ─────────────────────────────────────────────────────
 router.post('/engagements/:id/produce-mastery-logs', (req, res) => {
-  const { produceEngagementMasteryLogs } = require('../../core/masteryLog');
   try {
     const logs = produceEngagementMasteryLogs(req.params.id);
     res.json({ message: `${logs.length} Mastery Logs produced`, log_ids: logs.map(l => l.log_id) });

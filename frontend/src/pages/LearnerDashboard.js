@@ -20,7 +20,7 @@ export default function LearnerDashboard() {
   return (
     <div style={S.page}>
       <nav style={S.nav}>
-        <div style={S.logo}>VAK</div>
+        <div style={S.logo}>QUBIREX</div>
         <div style={S.navRight}>
           <div style={S.langBadge}>{langName[user?.language] || user?.language}</div>
           <span style={S.navName}>{user?.name}</span>

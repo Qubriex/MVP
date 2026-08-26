@@ -1,8 +1,10 @@
 // src/pages/LearningSession.js
 // ─────────────────────────────────────────────────────────────────────────────
-// THE LEARNING SESSION — The learner's direct experience of Vak
-// This is where Three Laws play out: RECEIVE (context loaded) → BUILD
-// (instruction cycle) → RETURN (mastery confirmed, advance)
+// THE LEARNING SESSION — the learner's direct experience of Professor Qubirex.
+// RECEIVE (context loaded) → BUILD (instruction cycle) → RETURN (mastery
+// confirmed, advance). TEACH decides when a mastery check is due — there is
+// no manual "ready" trigger; the learner just keeps talking to Professor
+// Qubirex through the same input box.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +16,7 @@ const APPROACH_NAMES = {
   analogy: 'Analogy',
   worked_example: 'Worked Example',
   decomposition: 'Building Blocks',
-  simplified: 'Simplified'
+  socratic: 'Socratic'
 };
 
 export default function LearningSession() {
@@ -31,23 +33,15 @@ export default function LearningSession() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState('instruction'); // instruction | mastery_check | result
-  const [masteryQuestion, setMasteryQuestion] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
   const lang = user?.language || 'telugu';
   const langName = lang === 'hindi' ? 'हिंदी' : 'తెలుగు';
-  const readyText = lang === 'hindi' ? 'मैं तैयार हूँ — परीक्षा लो' : 'నేను సిద్ధంగా ఉన్నాను — పరీక్షించు';
   const sendText = lang === 'hindi' ? 'भेजें' : 'పంపు';
 
-  // Start session on mount
-  useEffect(() => {
-    startSession();
-  }, []);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { startSession(); }, []);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const startSession = async () => {
     setLoading(true);
@@ -58,12 +52,14 @@ export default function LearningSession() {
       setClusterLabel(res.data.cluster_label || '');
       setApproach(res.data.approach || 'native_concept');
       setLoopCount(res.data.loop_count || 0);
+      setPhase('instruction');
+      setResult(null);
 
       const history = res.data.history || [];
-      if (res.data.message) {
-        setMessages([{ role: 'ai', content: res.data.message, type: 'instruction' }]);
-      } else {
+      if (history.length > 0) {
         setMessages(history.map(m => ({ role: m.role, content: m.content, type: m.message_type })));
+      } else if (res.data.message) {
+        setMessages([{ role: 'ai', content: res.data.message, type: 'diagnosis' }]);
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to start session');
@@ -79,15 +75,21 @@ export default function LearningSession() {
     setLoading(true);
 
     try {
-      const res = await api.post(`/learner/session/${sessionId}/message`, {
-        content: userMsg,
-        request_mastery_check: false
-      });
-      setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: res.data.message_type }]);
+      const res = await api.post('/learner/session/message', { content: userMsg, session_id: sessionId });
 
-      if (res.data.message_type === 'mastery_check' && res.data.mastery_check_question) {
-        setMasteryQuestion(res.data.mastery_check_question);
-        setPhase('mastery_check');
+      if (res.data.result === 'advance') {
+        setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: 'advance_trigger' }]);
+        setResult(res.data);
+        setPhase('result');
+      } else if (res.data.result === 'loop') {
+        setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: 'loop_trigger' }]);
+        setLoopCount(res.data.loop_count);
+        setApproach(res.data.next_approach);
+        setPhase('instruction');
+      } else {
+        setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: res.data.decision === 'CHECK' ? 'mastery_check' : 'instruction' }]);
+        if (res.data.approach) setApproach(res.data.approach);
+        setPhase(res.data.decision === 'CHECK' ? 'mastery_check' : 'instruction');
       }
     } catch (err) {
       setMessages(prev => [...prev, { role: 'ai', content: 'Technical error. Please try again.', type: 'error' }]);
@@ -95,82 +97,10 @@ export default function LearningSession() {
     setLoading(false);
   };
 
-  const requestMasteryCheck = async () => {
-    setLoading(true);
-    try {
-      const res = await api.post(`/learner/session/${sessionId}/message`, {
-        content: lang === 'hindi' ? 'मैं समझ गया हूँ, परीक्षा लो' : 'నేను అర్థం చేసుకున్నాను, పరీక్షించు',
-        request_mastery_check: true
-      });
-      setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: 'mastery_check' }]);
-      setMasteryQuestion(res.data.mastery_check_question || res.data.message);
-      setPhase('mastery_check');
-    } catch (err) {
-      setError('Failed to generate mastery check');
-    }
-    setLoading(false);
-  };
-
-  const submitMasteryAnswer = async () => {
-    if (!input.trim() || loading) return;
-    const answer = input.trim();
-    setInput('');
-    setMessages(prev => [...prev, { role: 'learner', content: answer, type: 'mastery_answer' }]);
-    setLoading(true);
-
-    try {
-      const res = await api.post(`/learner/session/${sessionId}/mastery-check`, {
-        question: masteryQuestion,
-        learner_response: answer
-      });
-
-      if (res.data.result === 'advance') {
-        setMessages(prev => [...prev, {
-          role: 'ai',
-          content: res.data.feedback + (res.data.programme_complete
-            ? (lang === 'hindi' ? '\n\n🎓 आपने सभी कौशल पूरे कर लिए हैं!' : '\n\n🎓 మీరు అన్ని నైపుణ్యాలు పూర్తి చేశారు!')
-            : (lang === 'hindi' ? `\n\n✅ आगे बढ़ते हैं: ${res.data.next_node?.label}` : `\n\n✅ ముందుకు వెళ్దాం: ${res.data.next_node?.label}`)),
-          type: 'advance_trigger'
-        }]);
-        setResult({ ...res.data, type: 'advance' });
-        setPhase('result');
-      } else {
-        // Loop — try different approach
-        setMessages(prev => [...prev, {
-          role: 'ai',
-          content: res.data.feedback + '\n\n' + (lang === 'hindi'
-            ? `चलिए एक अलग तरीके से समझते हैं। नया तरीका: ${APPROACH_NAMES[res.data.next_approach] || res.data.next_approach}`
-            : `వేరే విధంగా అర్థం చేసుకుందాం। కొత్త పద్ధతి: ${APPROACH_NAMES[res.data.next_approach] || res.data.next_approach}`),
-          type: 'loop_trigger'
-        }]);
-        setPhase('instruction');
-        setLoopCount(res.data.loop_count);
-        setApproach(res.data.next_approach);
-
-        // Auto-start new session with new approach
-        setTimeout(async () => {
-          if (res.data.new_session_id) {
-            setSessionId(res.data.new_session_id);
-            // Load instruction for new approach
-            const nextRes = await api.post(`/learner/session/${res.data.new_session_id}/message`, {
-              content: lang === 'hindi' ? 'फिर से शुरू करें' : 'మళ్ళీ మొదలుపెట్టు',
-              request_mastery_check: false
-            });
-            setMessages(prev => [...prev, { role: 'ai', content: nextRes.data.message, type: 'instruction' }]);
-          }
-        }, 800);
-      }
-    } catch (err) {
-      setError('Evaluation failed: ' + (err.response?.data?.error || err.message));
-    }
-    setLoading(false);
-  };
-
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (phase === 'mastery_check') submitMasteryAnswer();
-      else sendMessage();
+      sendMessage();
     }
   };
 
@@ -216,7 +146,7 @@ export default function LearningSession() {
                       msg.type === 'advance_trigger' ? '1px solid #10B981' :
                       msg.type === 'loop_trigger' ? '1px solid #F59E0B' : '1px solid #334155'
             }}>
-              {msg.role === 'ai' && <div style={S.aiLabel}>VAK</div>}
+              {msg.role === 'ai' && <div style={S.aiLabel}>PROFESSOR QUBIREX</div>}
               <div style={S.msgText}>{msg.content}</div>
             </div>
           </div>
@@ -224,7 +154,7 @@ export default function LearningSession() {
         {loading && (
           <div style={S.msgWrap}>
             <div style={{ ...S.bubble, background: '#1E293B' }}>
-              <div style={S.aiLabel}>VAK</div>
+              <div style={S.aiLabel}>PROFESSOR QUBIREX</div>
               <div style={S.typing}><span/><span/><span/></div>
             </div>
           </div>
@@ -235,11 +165,6 @@ export default function LearningSession() {
       {/* Input area */}
       {phase !== 'result' ? (
         <div style={S.inputArea}>
-          {phase === 'instruction' && (
-            <button style={S.readyBtn} onClick={requestMasteryCheck} disabled={loading || messages.length < 2}>
-              {readyText}
-            </button>
-          )}
           <div style={S.inputRow}>
             <textarea
               style={S.input}
@@ -253,7 +178,7 @@ export default function LearningSession() {
               rows={3}
               disabled={loading}
             />
-            <button style={S.sendBtn} onClick={phase === 'mastery_check' ? submitMasteryAnswer : sendMessage} disabled={loading || !input.trim()}>
+            <button style={S.sendBtn} onClick={sendMessage} disabled={loading || !input.trim()}>
               {sendText}
             </button>
           </div>
@@ -313,7 +238,6 @@ const S = {
   msgText: { fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
   typing: { display: 'flex', gap: 3, padding: '4px 0' },
   inputArea: { background: '#1E293B', borderTop: '1px solid #334155', padding: '12px 16px', flexShrink: 0 },
-  readyBtn: { width: '100%', background: '#1A1A3A', border: '1px solid #6D28D9', color: '#C4B5FD', padding: '10px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 8 },
   inputRow: { display: 'flex', gap: 8, alignItems: 'flex-end' },
   input: { flex: 1, background: '#0F172A', border: '1px solid #334155', color: '#F1F5F9', padding: '10px 14px', borderRadius: 10, fontSize: 15, lineHeight: 1.5, resize: 'none', fontFamily: 'Arial, sans-serif', outline: 'none' },
   sendBtn: { background: '#3B82F6', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', height: 44, flexShrink: 0 },
