@@ -2,18 +2,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MASTERY LOG PRODUCTION LOGIC
 //
-// The Mastery Log is Vak's complete output document. It is structured
-// evidence of capability movement — no more, no less.
+// The Mastery Log is Qubirex's primary output — the verified record of what a
+// learner can and cannot do, produced after the learner completes their
+// engagement. It is the ONLY learner-specific document shared with institutions.
 //
 // CRITICAL BOUNDARY RULE:
-// - readiness_classification: ALWAYS NULL — owned by commissioning client
-// - external_score: ALWAYS NULL — owned by assessment platform/employer
+// - readiness_classification: ALWAYS NULL — owned by the commissioning client
+// - external_score: ALWAYS NULL — owned by the commissioning client / assessment platform
 // These two fields are ALWAYS BLANK in every version of the Mastery Log.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { getDb } = require('../db/init');
 const { calculateSimulationReadiness } = require('./instructionEngine');
 const { v4: uuidv4 } = require('uuid');
+
+function confidenceLabel(confidenceIndicator, hasRecord) {
+  if (!hasRecord) return 'not_started';
+  if (confidenceIndicator >= 0.75) return 'high';
+  if (confidenceIndicator >= 0.55) return 'solid';
+  return 'building';
+}
 
 /**
  * Produce the Mastery Log for a learner in an engagement
@@ -63,13 +71,11 @@ function produceLearnerMasteryLog(engagementId, learnerId) {
     const nodeLogs = [];
 
     for (const node of nodes) {
-      // ─── Fetch mastery record for this learner+node ─────────────────────
       const masteryRecord = db.prepare(`
         SELECT nm.* FROM node_mastery nm
         WHERE nm.engagement_learner_id = ? AND nm.skill_node_id = ?
       `).get(learner.el_id, node.id);
 
-      // ─── Fetch all mastery check results ────────────────────────────────
       const checkResults = db.prepare(`
         SELECT mc.* FROM mastery_checks mc
         WHERE mc.engagement_learner_id = ? AND mc.skill_node_id = ?
@@ -78,80 +84,56 @@ function produceLearnerMasteryLog(engagementId, learnerId) {
 
       nodeLogs.push({
         skill_node: node.node_label,
-        node_type: node.node_type,
-        difficulty_level: node.difficulty_level,
-        // ─── Vak's proprietary evidence fields ──────────────────────────
         mastery_attainment: masteryRecord ? Math.round((masteryRecord.mastery_attainment || 0) * 100) : null,
         time_to_mastery_minutes: masteryRecord ? Math.round(masteryRecord.time_to_mastery_minutes || 0) : null,
         attempt_count: masteryRecord ? (masteryRecord.attempt_count || 0) : (checkResults.length || 0),
-        confidence_indicator: masteryRecord ? parseFloat((masteryRecord.confidence_indicator || 0).toFixed(2)) : null,
-        node_status: masteryRecord && masteryRecord.advanced_at ? 'mastered' : 'in_progress',
-        mastered_at: masteryRecord ? masteryRecord.advanced_at : null
+        confidence_indicator: confidenceLabel(masteryRecord ? masteryRecord.confidence_indicator || 0 : 0, !!masteryRecord),
+        advanced: !!(masteryRecord && masteryRecord.advanced_at)
       });
     }
 
-    // ─── Simulation readiness for this cluster ──────────────────────────
-    const nodeMasteryForCluster = nodeLogs.map(n => ({
-      mastery_attainment: (n.mastery_attainment || 0) / 100,
-      confidence_indicator: n.confidence_indicator || 0
-    }));
-    const simulationReadiness = calculateSimulationReadiness(nodeMasteryForCluster);
+    const simulationReadiness = calculateSimulationReadiness(
+      nodes.map(n => {
+        const mr = db.prepare(`SELECT * FROM node_mastery WHERE engagement_learner_id = ? AND skill_node_id = ?`).get(learner.el_id, n.id);
+        return { mastery_attainment: mr ? mr.mastery_attainment || 0 : 0, confidence_indicator: mr ? mr.confidence_indicator || 0 : 0 };
+      })
+    );
 
-    const avgMastery = nodeLogs.filter(n => n.mastery_attainment !== null).length > 0
-      ? nodeLogs.reduce((s, n) => s + (n.mastery_attainment || 0), 0) / nodeLogs.length
+    const masteredNodes = nodeLogs.filter(n => n.mastery_attainment !== null);
+    const clusterMasteryAverage = masteredNodes.length > 0
+      ? Math.round(masteredNodes.reduce((s, n) => s + n.mastery_attainment, 0) / masteredNodes.length)
       : null;
 
     clusterLogs.push({
       cluster: cluster.cluster_label,
-      cluster_ref: cluster.cluster_ref,
-      required_proficiency: cluster.required_proficiency,
-      mastery_threshold_pct: Math.round((cluster.mastery_threshold || 0.75) * 100),
-      nodes_total: nodes.length,
-      nodes_mastered: nodeLogs.filter(n => n.node_status === 'mastered').length,
-      average_mastery_attainment: avgMastery ? Math.round(avgMastery) : null,
+      cluster_ref: cluster.cluster_ref || null,
+      nodes: nodeLogs,
+      cluster_mastery_average: clusterMasteryAverage,
       simulation_readiness_flag: simulationReadiness,
       // ─── BLANK FIELDS — always present, always blank ─────────────────
       readiness_classification: null,  // OWNED BY COMMISSIONING CLIENT — ALWAYS BLANK
-      external_score: null,            // OWNED BY ASSESSMENT PLATFORM — ALWAYS BLANK
-      skill_nodes: nodeLogs
+      external_score: null             // OWNED BY COMMISSIONING CLIENT — ALWAYS BLANK
     });
   }
 
   // ─── Compile full Mastery Log ─────────────────────────────────────────────
   const masteryLog = {
-    // Header
-    document_type: 'Vak Mastery Log',
-    version: '1.0',
-    produced_by: 'Vak AI Technologies',
-    produced_at: new Date().toISOString(),
-
-    // Reference fields
     learner_reference: learner.learner_ref,
     learner_name: learner.name,
-    capability_target_document_reference: `${engagement.ct_title} v${engagement.ct_version}`,
-    engagement_id: engagementId,
-    institution: engagement.institution_name,
+    capability_target_reference: `${engagement.ct_title} v${engagement.ct_version}`,
+    engagement_title: engagement.title,
     language_of_instruction: learner.language,
+    produced_at: new Date().toISOString(),
 
-    // Summary
-    total_clusters: clusterLogs.length,
-    clusters_completed: clusterLogs.filter(c => c.nodes_mastered === c.nodes_total).length,
-    overall_completion: clusterLogs.length > 0
-      ? Math.round((clusterLogs.filter(c => c.nodes_mastered === c.nodes_total).length / clusterLogs.length) * 100)
-      : 0,
-
-    // Cluster-level evidence
     clusters: clusterLogs,
 
     // ─── PERMANENT BLANK FIELDS ─────────────────────────────────────────
-    // These fields are ALWAYS BLANK — presence is intentional.
-    // They signal that Vak produces evidence and stops there.
-    // Readiness and scoring belong to the commissioning client.
-    readiness_classification: null,  // ALWAYS BLANK — OWNED BY COMMISSIONING CLIENT
-    external_score: null,            // ALWAYS BLANK — OWNED BY ASSESSMENT PLATFORM
+    // Always blank — presence is intentional. Qubirex produces evidence and
+    // stops there. Readiness and scoring belong to the commissioning client.
+    readiness_classification: null,
+    external_score: null,
 
-    // Footer
-    boundary_statement: 'This Mastery Log records capability movement and instruction evidence only. Readiness classification and external scoring are owned by the commissioning institution and are not populated by Vak AI Technologies under any circumstances.'
+    qubirex_note: 'Readiness Classification and External Score are owned by the commissioning client. Qubirex does not populate these fields.'
   };
 
   db.close();
@@ -194,7 +176,6 @@ function produceEngagementMasteryLogs(engagementId) {
     logs.push({ learner_id: el.learner_id, log_id: logId, log });
   }
 
-  // Mark engagement as completed
   db.prepare(`UPDATE engagements SET status = 'completed', completed_at = datetime('now') WHERE id = ?`)
     .run(engagementId);
 

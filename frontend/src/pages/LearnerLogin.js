@@ -30,7 +30,7 @@ export default function LearnerLogin() {
   return (
     <div style={styles.page}>
       <div style={styles.card}>
-        <div style={styles.logo}>VAK</div>
+        <div style={styles.logo}>QUBIREX</div>
         <h2 style={styles.title}>Learner Login</h2>
         <p style={styles.sub}>Enter your learner reference and engagement code</p>
         {error && <div style={styles.error}>{error}</div>}

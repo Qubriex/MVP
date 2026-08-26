@@ -1,9 +1,17 @@
-// db/init.js — Database schema initialisation
+// db/init.js — Qubirex Database Schema Initialisation
+// Inferexaa Private Limited
+//
+// SQLite (better-sqlite3), WAL mode, foreign keys ON. All tables IF NOT EXISTS.
+// Production path: process.env.DB_PATH or ./qubirex.db.
+//
+// Schema is organised in two layers:
+//   V1 — Core platform tables (institutions, learners, engagements, mastery)
+//   V2 — RAG Multi-Brain tables, one block per brain (MEM / CULT / EVAL / CURR / ORCH)
 const Database = require('better-sqlite3');
 const path = require('path');
 require('dotenv').config();
 
-const DB_PATH = process.env.DB_PATH || './vak.db';
+const DB_PATH = process.env.DB_PATH || './qubirex.db';
 
 function getDb() {
   const db = new Database(path.resolve(DB_PATH));
@@ -16,6 +24,10 @@ function initDb() {
   const db = getDb();
 
   db.exec(`
+    -- ═══════════════════════════════════════════════════════════════════════
+    -- V1 — CORE PLATFORM TABLES
+    -- ═══════════════════════════════════════════════════════════════════════
+
     -- ─── INSTITUTIONS ─────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS institutions (
       id TEXT PRIMARY KEY,
@@ -33,6 +45,16 @@ function initDb() {
       is_active INTEGER DEFAULT 1
     );
 
+    -- ─── INSTITUTION PORTAL USERS (admin/viewer seats on an institution account) ─
+    CREATE TABLE IF NOT EXISTS institution_users (
+      id TEXT PRIMARY KEY,
+      institution_id TEXT NOT NULL REFERENCES institutions(id),
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT DEFAULT 'viewer' CHECK(role IN ('admin','viewer')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     -- ─── LEARNERS ─────────────────────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS learners (
       id TEXT PRIMARY KEY,
@@ -46,18 +68,20 @@ function initDb() {
         'skilling_program','career_switcher'
       )),
       current_capability_level TEXT,
+      notification_prefs TEXT, -- JSON
       created_at TEXT DEFAULT (datetime('now')),
       is_active INTEGER DEFAULT 1,
       UNIQUE(institution_id, learner_ref)
     );
 
-    -- ─── CAPABILITY TARGET DOCUMENTS ─────────────────────────────────────────
+    -- ─── CAPABILITY TARGET DOCUMENTS (institution briefs, Path A/B) ──────────
     CREATE TABLE IF NOT EXISTS capability_targets (
       id TEXT PRIMARY KEY,
       institution_id TEXT NOT NULL REFERENCES institutions(id),
       version TEXT NOT NULL,
       title TEXT NOT NULL,
       path TEXT NOT NULL CHECK(path IN ('A','B')),
+      domain TEXT,
       raw_input TEXT,
       extracted_targets TEXT,        -- JSON
       confirmed INTEGER DEFAULT 0,
@@ -76,14 +100,16 @@ function initDb() {
       capability_target_id TEXT NOT NULL REFERENCES capability_targets(id),
       cluster_label TEXT NOT NULL,
       cluster_ref TEXT,              -- institution's own label/number
+      description TEXT,
       required_proficiency TEXT,
       mastery_threshold REAL DEFAULT 0.75,
       priority TEXT DEFAULT 'normal',
       evidence_type TEXT,
+      estimated_hours REAL,
       sequence_order INTEGER DEFAULT 0
     );
 
-    -- ─── SKILL NODES ──────────────────────────────────────────────────────────
+    -- ─── SKILL NODES (atomic teachable units within a cluster) ───────────────
     CREATE TABLE IF NOT EXISTS skill_nodes (
       id TEXT PRIMARY KEY,
       cluster_id TEXT NOT NULL REFERENCES skill_clusters(id),
@@ -94,7 +120,11 @@ function initDb() {
       difficulty_level INTEGER DEFAULT 1 CHECK(difficulty_level BETWEEN 1 AND 5),
       node_type TEXT DEFAULT 'concept' CHECK(node_type IN (
         'concept','applied','procedural','analytical'
-      ))
+      )),
+      phase INTEGER DEFAULT 1,       -- 1=Learning, 2=Coding/Applied, 3=Interview/Verbal
+      estimated_minutes INTEGER DEFAULT 20,
+      concept_tags TEXT,             -- JSON array — links to CKB retrieval
+      mastery_threshold REAL DEFAULT 0.70
     );
 
     -- ─── ENGAGEMENTS ──────────────────────────────────────────────────────────
@@ -112,7 +142,7 @@ function initDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
-    -- ─── ENGAGEMENT_LEARNERS ──────────────────────────────────────────────────
+    -- ─── ENGAGEMENT_LEARNERS (a learner enrolled in an engagement) ────────────
     CREATE TABLE IF NOT EXISTS engagement_learners (
       id TEXT PRIMARY KEY,
       engagement_id TEXT NOT NULL REFERENCES engagements(id),
@@ -126,7 +156,7 @@ function initDb() {
       UNIQUE(engagement_id, learner_id)
     );
 
-    -- ─── LEARNING SESSIONS ────────────────────────────────────────────────────
+    -- ─── LEARNING SESSIONS (one session per node attempt) ─────────────────────
     CREATE TABLE IF NOT EXISTS learning_sessions (
       id TEXT PRIMARY KEY,
       engagement_learner_id TEXT NOT NULL REFERENCES engagement_learners(id),
@@ -138,25 +168,36 @@ function initDb() {
       completed_at TEXT,
       active_minutes REAL DEFAULT 0,
       loop_count INTEGER DEFAULT 0,
-      explanation_approach TEXT DEFAULT 'native_concept'
-        CHECK(explanation_approach IN (
+      current_approach TEXT DEFAULT 'native_concept'
+        CHECK(current_approach IN (
           'native_concept','analogy','worked_example',
-          'decomposition','simplified'
-        ))
+          'decomposition','socratic'
+        )),
+      behaviour_signal TEXT DEFAULT 'engaged'
     );
 
     -- ─── SESSION MESSAGES ─────────────────────────────────────────────────────
-    -- Full interaction log — Vak's proprietary data, never shared
+    -- Full interaction log — learner-private, never shared with institutions
     CREATE TABLE IF NOT EXISTS session_messages (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES learning_sessions(id),
       role TEXT NOT NULL CHECK(role IN ('ai','learner')),
       content TEXT NOT NULL,
       message_type TEXT DEFAULT 'instruction' CHECK(message_type IN (
-        'instruction','question','response','mastery_check',
+        'diagnosis','instruction','doubt','doubt_answer','response','mastery_check',
         'feedback','loop_trigger','advance_trigger'
       )),
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── LOOP APPROACHES USED (per learner per node — never repeat) ───────────
+    CREATE TABLE IF NOT EXISTS loop_approaches_used (
+      id TEXT PRIMARY KEY,
+      engagement_learner_id TEXT NOT NULL REFERENCES engagement_learners(id),
+      skill_node_id TEXT NOT NULL REFERENCES skill_nodes(id),
+      approach TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(engagement_learner_id, skill_node_id, approach)
     );
 
     -- ─── MASTERY CHECKS ───────────────────────────────────────────────────────
@@ -188,7 +229,39 @@ function initDb() {
       UNIQUE(engagement_learner_id, skill_node_id)
     );
 
-    -- ─── MASTERY LOGS ─────────────────────────────────────────────────────────
+    -- ─── DOUBTS — learner-private, never shown to institutions ────────────────
+    CREATE TABLE IF NOT EXISTS doubts (
+      id TEXT PRIMARY KEY,
+      engagement_learner_id TEXT NOT NULL REFERENCES engagement_learners(id),
+      skill_node_id TEXT,
+      question_text TEXT NOT NULL,
+      ai_answer TEXT,
+      status TEXT DEFAULT 'answered' CHECK(status IN ('answered','escalated','resolved')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── STUDY PLANS — learner-private ─────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS study_plans (
+      id TEXT PRIMARY KEY,
+      engagement_learner_id TEXT NOT NULL REFERENCES engagement_learners(id),
+      planned_date TEXT NOT NULL,
+      planned_duration_minutes INTEGER DEFAULT 30,
+      notes TEXT,
+      completed INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── STREAKS — learner-private, engagement/motivation data ────────────────
+    CREATE TABLE IF NOT EXISTS streaks (
+      id TEXT PRIMARY KEY,
+      engagement_learner_id TEXT NOT NULL UNIQUE REFERENCES engagement_learners(id),
+      current_streak INTEGER DEFAULT 0,
+      longest_streak INTEGER DEFAULT 0,
+      total_session_days INTEGER DEFAULT 0,
+      last_session_date TEXT
+    );
+
+    -- ─── MASTERY LOGS — the final output document per learner ─────────────────
     CREATE TABLE IF NOT EXISTS mastery_logs (
       id TEXT PRIMARY KEY,
       engagement_id TEXT NOT NULL REFERENCES engagements(id),
@@ -203,7 +276,7 @@ function initDb() {
       delivered_at TEXT
     );
 
-    -- ─── ADMIN USERS ──────────────────────────────────────────────────────────
+    -- ─── ADMIN USERS (Inferexaa staff) ─────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS admin_users (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
@@ -212,9 +285,128 @@ function initDb() {
       role TEXT DEFAULT 'admin',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    -- ═══════════════════════════════════════════════════════════════════════
+    -- V2 — RAG MULTI-BRAIN TABLES
+    -- ═══════════════════════════════════════════════════════════════════════
+
+    -- ─── MEM — Learner Memory ───────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS learner_memory (
+      id TEXT PRIMARY KEY,
+      learner_id TEXT NOT NULL REFERENCES learners(id),
+      engagement_learner_id TEXT NOT NULL REFERENCES engagement_learners(id),
+      memory_type TEXT NOT NULL CHECK(memory_type IN (
+        'interaction','struggle','vocabulary','milestone'
+      )),
+      node_id TEXT,
+      cluster_id TEXT,
+      content TEXT,
+      metadata TEXT,                 -- JSON: role, decision, approachUsed, behaviourSignal, masteryScore, timestamp
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS learner_behaviour_fingerprint (
+      id TEXT PRIMARY KEY,
+      learner_id TEXT NOT NULL UNIQUE REFERENCES learners(id),
+      avg_response_time_seconds REAL DEFAULT 0,
+      disengagement_rate REAL DEFAULT 0,
+      avg_loops_per_node REAL DEFAULT 0,
+      preferred_approach TEXT,
+      vocabulary_level TEXT DEFAULT 'beginner' CHECK(vocabulary_level IN ('beginner','intermediate','advanced')),
+      session_count INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── CULT — Cultural Knowledge Base ─────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS cultural_knowledge_base (
+      id TEXT PRIMARY KEY,
+      concept_tag TEXT NOT NULL,
+      language TEXT NOT NULL CHECK(language IN ('telugu','hindi')),
+      region TEXT NOT NULL,
+      vocabulary_level TEXT DEFAULT 'beginner',
+      entry_point TEXT NOT NULL,
+      explanation_text TEXT,
+      effectiveness_score REAL DEFAULT 0.75,
+      advance_count INTEGER DEFAULT 0,
+      loop_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS cultural_usage_log (
+      id TEXT PRIMARY KEY,
+      ckb_entry_id TEXT NOT NULL REFERENCES cultural_knowledge_base(id),
+      learner_id TEXT,
+      session_id TEXT,
+      node_id TEXT,
+      outcome TEXT CHECK(outcome IN ('ADVANCE','LOOP')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── EVAL — Mastery Evaluator ───────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS eval_rubrics (
+      id TEXT PRIMARY KEY,
+      node_label TEXT NOT NULL,
+      language TEXT NOT NULL,
+      passing_criteria TEXT,          -- JSON array
+      failing_indicators TEXT,        -- JSON array
+      gap_taxonomy TEXT,              -- JSON object
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(node_label, language)
+    );
+
+    CREATE TABLE IF NOT EXISTS eval_example_responses (
+      id TEXT PRIMARY KEY,
+      node_label TEXT NOT NULL,
+      language TEXT NOT NULL,
+      response_text TEXT NOT NULL,
+      outcome TEXT NOT NULL CHECK(outcome IN ('pass','fail')),
+      score REAL,
+      gaps_identified TEXT,           -- JSON array
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── CURR — Curriculum Brain ────────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS brief_store (
+      id TEXT PRIMARY KEY,
+      institution_id TEXT NOT NULL REFERENCES institutions(id),
+      domain TEXT NOT NULL,
+      language TEXT NOT NULL,
+      raw_input_summary TEXT,
+      extracted_clusters TEXT,        -- JSON
+      extraction_confidence REAL,
+      confirmed INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS curriculum_node_specs (
+      id TEXT PRIMARY KEY,
+      skill_node_id TEXT NOT NULL UNIQUE REFERENCES skill_nodes(id),
+      node_label TEXT NOT NULL,
+      cluster_label TEXT,
+      learning_objectives TEXT,       -- JSON array
+      prerequisite_labels TEXT,       -- JSON array
+      mastery_threshold REAL DEFAULT 0.70,
+      phase INTEGER DEFAULT 1,
+      difficulty_level INTEGER DEFAULT 1,
+      estimated_minutes INTEGER DEFAULT 20,
+      concept_tags TEXT,              -- JSON array
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- ─── ORCH — Orchestration Log ───────────────────────────────────────────
+    CREATE TABLE IF NOT EXISTS orchestration_log (
+      id TEXT PRIMARY KEY,
+      session_id TEXT,
+      learner_id TEXT,
+      request_type TEXT NOT NULL,
+      brains_activated TEXT,          -- JSON array
+      processing_ms INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
-  console.log('✅ Database initialised at:', DB_PATH);
+  console.log('Qubirex database initialised at:', DB_PATH);
   db.close();
 }
 

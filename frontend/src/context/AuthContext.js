@@ -9,24 +9,24 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null);
 
   useEffect(() => {
-    const t = localStorage.getItem('vak_token');
-    const u = localStorage.getItem('vak_user');
-    const r = localStorage.getItem('vak_role');
+    const t = localStorage.getItem('qubirex_token');
+    const u = localStorage.getItem('qubirex_user');
+    const r = localStorage.getItem('qubirex_role');
     if (t && u) { setToken(t); setUser(JSON.parse(u)); setRole(r); }
   }, []);
 
   const login = (tokenVal, userData, roleVal) => {
     setToken(tokenVal); setUser(userData); setRole(roleVal);
-    localStorage.setItem('vak_token', tokenVal);
-    localStorage.setItem('vak_user', JSON.stringify(userData));
-    localStorage.setItem('vak_role', roleVal);
+    localStorage.setItem('qubirex_token', tokenVal);
+    localStorage.setItem('qubirex_user', JSON.stringify(userData));
+    localStorage.setItem('qubirex_role', roleVal);
   };
 
   const logout = () => {
     setToken(null); setUser(null); setRole(null);
-    localStorage.removeItem('vak_token');
-    localStorage.removeItem('vak_user');
-    localStorage.removeItem('vak_role');
+    localStorage.removeItem('qubirex_token');
+    localStorage.removeItem('qubirex_user');
+    localStorage.removeItem('qubirex_role');
   };
 
   return (
