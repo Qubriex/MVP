@@ -99,7 +99,7 @@ Respond ONLY with JSON:
   "behaviourSignal": "engaged"
 }`;
 
-  const text = await callAI({ system, userMessage: `Begin the diagnosis for "${nodeLabel}".`, maxTokens: 512, temperature: 0.7 });
+  const text = await callAI({ system, userMessage: `Begin the diagnosis for "${nodeLabel}".`, maxTokens: 1024, temperature: 0.7 });
   return safeParseJSON(text, { message: text, decision: 'DIAGNOSE', behaviourSignal: 'engaged' });
 }
 
@@ -155,7 +155,7 @@ Respond ONLY with JSON:
     ? conversationHistory[conversationHistory.length - 1].content
     : `Begin teaching "${nodeLabel}" using the ${approach} approach.`;
 
-  const text = await callAI({ system, userMessage: lastMessage, maxTokens: 1200, temperature: 0.7 });
+  const text = await callAI({ system, userMessage: lastMessage, maxTokens: 2048, temperature: 0.7 });
   return safeParseJSON(text, {
     message: text, decision: 'CONTINUE', checkQuestion: null, mermaid: null, code: null,
     behaviourSignal: 'engaged', approachesUsed: [approach], culturalExampleUsed: null
@@ -178,7 +178,7 @@ Respond ONLY with JSON:
   "approach_used": "brief description of the angle taken"
 }`;
 
-  const text = await callAI({ system, userMessage: questionText, maxTokens: 800, temperature: 0.7 });
+  const text = await callAI({ system, userMessage: questionText, maxTokens: 1200, temperature: 0.7 });
   return safeParseJSON(text, { answer: text, approach_used: 'direct_answer' });
 }
 

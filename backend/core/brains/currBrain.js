@@ -63,7 +63,7 @@ Respond ONLY with JSON:
   const text = await callAI({
     system,
     userMessage: `Extract capability targets from this input:\n\n${rawInput}`,
-    maxTokens: 2048,
+    maxTokens: 3072,
     temperature: 0.3
   });
 
@@ -107,7 +107,7 @@ Respond ONLY with JSON:
   const text = await callAI({
     system,
     userMessage: `Cluster: "${clusterLabel}"\nDescription: "${clusterDescription || 'As specified in the capability target'}"\nRequired proficiency: "${proficiencyLevel || 'intermediate'}"`,
-    maxTokens: 2048,
+    maxTokens: 3072,
     temperature: 0.3
   });
 
