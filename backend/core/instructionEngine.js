@@ -18,7 +18,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const MODEL_NAME = 'gemini-1.5-flash';
+const MODEL_NAME = 'gemini-3.6-flash';
 
 // ─── Five explanation approaches — tried in order, never repeated at a node ──
 const EXPLANATION_APPROACHES = [

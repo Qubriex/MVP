@@ -67,7 +67,7 @@ async function evaluate({ nodeLabel, language, question, learnerResponse, loopCo
   const system = buildSystemPrompt(nodeLabel, language, rubric, passingExamples, failingExamples);
   const userMessage = `Mastery check question: "${question}"\n\nLearner's response: "${learnerResponse}"\n\nEvaluate this response for the skill node "${nodeLabel}".`;
 
-  const text = await callAI({ system, userMessage, maxTokens: 700, temperature: 0.3 });
+  const text = await callAI({ system, userMessage, maxTokens: 1200, temperature: 0.3 });
   const parsed = safeParseJSON(text, {
     passed: false, score: 0.5, evaluation: text, feedbackForLearner: text,
     loopApproachIfFailed: 'concept_not_understood', recommendedApproach: 'native_concept', understandingGaps: []
