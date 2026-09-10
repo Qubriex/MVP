@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import { MOCK_LEARNER_DASHBOARD, MOCK_MASTERY_RECORD } from '../utils/mockData';
 
 export default function LearnerDashboard() {
   const { user, logout } = useAuth();
@@ -11,8 +12,14 @@ export default function LearnerDashboard() {
   const [mastery, setMastery] = useState([]);
 
   useEffect(() => {
-    api.get('/learner/dashboard').then(r => setData(r.data)).catch(() => {});
-    api.get('/learner/mastery-record').then(r => setMastery(r.data)).catch(() => {});
+    // dev fallback — an unreachable backend can resolve with a 200 HTML page
+    // (SPA host rewrite) instead of erroring, so validate the shape too
+    api.get('/learner/dashboard')
+      .then(r => { if (!r.data || typeof r.data.progress_pct === 'undefined') throw new Error('unexpected response shape'); setData(r.data); })
+      .catch(() => setData(MOCK_LEARNER_DASHBOARD));
+    api.get('/learner/mastery-record')
+      .then(r => { if (!Array.isArray(r.data)) throw new Error('unexpected response shape'); setMastery(r.data); })
+      .catch(() => setMastery(MOCK_MASTERY_RECORD));
   }, []);
 
   const langName = { hindi: 'हिंदी', telugu: 'తెలుగు' };
