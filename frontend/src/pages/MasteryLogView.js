@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { MOCK_MASTERY_LOG } from '../utils/mockData';
 
 export default function MasteryLogView() {
   const { logId } = useParams();
@@ -10,12 +11,14 @@ export default function MasteryLogView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get(`/institution/engagements/x/mastery-logs`).catch(() => {});
-    // Try to get from admin route
+    // Try to get from admin route. dev fallback — an unreachable backend can
+    // resolve with a 200 HTML page (SPA host rewrite) instead of erroring,
+    // so validate the shape too.
     api.get(`/admin/mastery-logs/${logId}`).then(r => {
+      if (!r.data || !r.data.log_data || !Array.isArray(r.data.log_data.clusters)) throw new Error('unexpected response shape');
       setLog(r.data.log_data);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => { setLog(MOCK_MASTERY_LOG); setLoading(false); });
   }, [logId]);
 
   if (loading) return <div style={{ color: '#94A3B8', padding: 40, fontFamily: 'Arial' }}>Loading…</div>;

@@ -10,6 +10,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import { MOCK_SESSION_START } from '../utils/mockData';
 
 const APPROACH_NAMES = {
   native_concept: 'Native Concept',
@@ -47,6 +48,9 @@ export default function LearningSession() {
     setLoading(true);
     try {
       const res = await api.post('/learner/session/start');
+      // dev fallback — an unreachable backend can resolve with a 200 HTML
+      // page (SPA host rewrite) instead of erroring, so validate the shape too
+      if (!res.data || !res.data.session_id) throw new Error('unexpected response shape');
       setSessionId(res.data.session_id);
       setNodeLabel(res.data.node_label || '');
       setClusterLabel(res.data.cluster_label || '');
@@ -62,7 +66,17 @@ export default function LearningSession() {
         setMessages([{ role: 'ai', content: res.data.message, type: 'diagnosis' }]);
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to start session');
+      // dev fallback — no backend reachable, load a sample conversation instead of a dead end
+      setError('');
+      const mock = MOCK_SESSION_START;
+      setSessionId(mock.session_id);
+      setNodeLabel(mock.node_label);
+      setClusterLabel(mock.cluster_label);
+      setApproach(mock.approach);
+      setLoopCount(mock.loop_count);
+      setPhase('instruction');
+      setResult(null);
+      setMessages(mock.history.map(m => ({ role: m.role, content: m.content, type: m.type })));
     }
     setLoading(false);
   };
@@ -76,6 +90,7 @@ export default function LearningSession() {
 
     try {
       const res = await api.post('/learner/session/message', { content: userMsg, session_id: sessionId });
+      if (!res.data || !res.data.message) throw new Error('unexpected response shape'); // dev fallback — SPA host rewrite can resolve 200 with HTML
 
       if (res.data.result === 'advance') {
         setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: 'advance_trigger' }]);

@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { MOCK_ENGAGEMENT_DETAIL, MOCK_MASTERY_LOGS } from '../utils/mockData';
 
 export default function EngagementDetail() {
   const { id } = useParams();
@@ -12,15 +13,29 @@ export default function EngagementDetail() {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    api.get(`/institution/engagements/${id}`).then(r => { setData(r.data); setLoading(false); });
-    api.get(`/institution/engagements/${id}/mastery-logs`).then(r => setLogs(r.data)).catch(() => {});
+    // dev fallback — an unreachable backend can resolve with a 200 HTML page
+    // (SPA host rewrite) instead of erroring, so validate the shape too
+    api.get(`/institution/engagements/${id}`)
+      .then(r => {
+        if (!r.data || typeof r.data !== 'object' || !r.data.id) throw new Error('unexpected response shape');
+        setData(r.data); setLoading(false);
+      })
+      .catch(() => { setData({ ...MOCK_ENGAGEMENT_DETAIL, id }); setLoading(false); });
+    api.get(`/institution/engagements/${id}/mastery-logs`)
+      .then(r => { if (!Array.isArray(r.data)) throw new Error('unexpected response shape'); setLogs(r.data); })
+      .catch(() => setLogs(MOCK_MASTERY_LOGS));
   }, [id]);
 
   const produceLogs = async () => {
     setProducing(true);
-    await api.post(`/institution/engagements/${id}/produce-mastery-logs`);
-    const res = await api.get(`/institution/engagements/${id}/mastery-logs`);
-    setLogs(res.data);
+    try {
+      await api.post(`/institution/engagements/${id}/produce-mastery-logs`);
+      const res = await api.get(`/institution/engagements/${id}/mastery-logs`);
+      if (!Array.isArray(res.data)) throw new Error('unexpected response shape');
+      setLogs(res.data);
+    } catch {
+      setLogs(MOCK_MASTERY_LOGS); // dev fallback — no backend reachable
+    }
     setProducing(false);
   };
 

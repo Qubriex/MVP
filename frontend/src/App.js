@@ -2,6 +2,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import DevNav from './components/DevNav';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -56,6 +57,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <DevNav />
       </BrowserRouter>
     </AuthProvider>
   );

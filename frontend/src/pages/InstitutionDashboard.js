@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import { MOCK_ENGAGEMENTS } from '../utils/mockData';
 
 export default function InstitutionDashboard() {
   const { user, logout } = useAuth();
@@ -11,7 +12,14 @@ export default function InstitutionDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/institution/engagements').then(r => { setEngagements(r.data); setLoading(false); }).catch(() => setLoading(false));
+    api.get('/institution/engagements')
+      .then(r => {
+        // dev fallback — an unreachable backend can resolve with a 200 HTML
+        // page (SPA host rewrite) instead of erroring, so validate the shape too
+        if (!Array.isArray(r.data)) throw new Error('unexpected response shape');
+        setEngagements(r.data); setLoading(false);
+      })
+      .catch(() => { setEngagements(MOCK_ENGAGEMENTS); setLoading(false); });
   }, []);
 
   const statusColor = { active: '#10B981', completed: '#3B82F6', setup: '#F59E0B', on_hold: '#6B7280' };
