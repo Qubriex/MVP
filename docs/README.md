@@ -80,7 +80,18 @@ frontend/
 ├── public/index.html
 └── src/
     ├── App.js
-    ├── context/AuthContext.js
+    ├── context/
+    │   ├── AuthContext.js
+    │   └── ThemeContext.js          # light/dark state, persisted to localStorage
+    ├── hooks/useReveal.js           # scroll-reveal IntersectionObserver hook
+    ├── styles/
+    │   ├── tokens.css               # design tokens — see DESIGN SYSTEM below
+    │   └── global.css               # reset + shared component classes
+    ├── components/
+    │   ├── NavBar.js / Footer.js    # shared page chrome
+    │   ├── PhoenixMark.js           # brand mark (placeholder, see note below)
+    │   ├── ThemeToggle.js / Reveal.js / PageTransition.js
+    │   └── DevNav.js                # dev-only page navigator, not part of the app UI
     ├── utils/api.js
     └── pages/
         ├── LandingPage.js
@@ -97,6 +108,36 @@ docs/
 ├── MVP_DESIGN_LIST.md
 └── API_REFERENCE.md
 ```
+
+---
+
+## DESIGN SYSTEM
+
+The frontend runs on a warm, Claude-inspired design system — a paper/charcoal
+base palette with an accent gradient sampled from the phoenix mark (amber →
+burnt orange → deep maroon), a Fraunces/Inter type pairing, a 4px spacing
+scale, and restrained scroll/hover motion. It replaced an earlier dark
+blue-gray UI; no routes, copy, or backend behavior changed as part of that
+redesign.
+
+**Where things live:**
+
+| File | Purpose |
+|---|---|
+| `src/styles/tokens.css` | Every color, spacing, type, radius, shadow and motion value as CSS custom properties. Full header comment there explains how to retune the palette — start here before editing any component's styling. |
+| `src/styles/global.css` | Reset + shared classes built on those tokens: `.btn`/`.btn-primary`/`.btn-secondary`/`.btn-ghost`, `.card`, `.input`/`.textarea`, `.badge-*`, `.nav`, `.footer`, `.table`, `.reveal`, `.hero-wash`, `.page-fade`. Compose these in new components instead of hardcoding hex/px values. |
+| `src/context/ThemeContext.js` | Light/dark toggle. Defaults to light, persists to `localStorage` (`qubirex_theme`), sets `data-theme` on `<html>` — that attribute is what `tokens.css`'s dark overrides key off. |
+| `src/components/NavBar.js`, `Footer.js` | Shared chrome. Pages pass page-specific content (login buttons, user menu, logout) via the `right` prop so behavior stays page-owned. |
+| `src/components/Reveal.js`, `src/hooks/useReveal.js` | Fade-up-on-scroll wrapper, staggered via a `delay` (ms) prop. No-ops to fully visible under `prefers-reduced-motion`. |
+| `src/components/PageTransition.js` | Wraps the router so navigating between pages fades instead of cutting. |
+| `src/components/PhoenixMark.js` | **Placeholder** brand mark built from the accent gradient — the real logo file was shared in chat, not as a repo asset. Drop it in as `public/phoenix-logo.png` (or similar) and swap the `<svg>` in this file for an `<img>`; `NavBar`/`Footer` don't need any other changes. |
+
+**Retuning the palette:** every accent color lives in the `--accent-*` scale
+at the top of `tokens.css`, with the gradient itself in `--gradient-accent`.
+Base surface colors are `--color-bg` / `--color-surface` / `--color-border` /
+`--color-text` (light values on `:root`, dark overrides under
+`[data-theme='dark']`). Change values there once — every component picks it
+up automatically since nothing hardcodes a hex value.
 
 ---
 
