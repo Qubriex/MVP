@@ -3,13 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0F172A" />
+  <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#1A1915" media="(prefers-color-scheme: dark)" />
   <title>Qubirex — Receive. Build. Return.</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #0F172A; font-family: Arial, sans-serif; }
-    #root { min-height: 100vh; }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    // Applied before paint to avoid a light-mode flash on a saved dark session.
+    try {
+      var t = localStorage.getItem('qubirex_theme');
+      document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <div id="root"></div>
