@@ -119,47 +119,52 @@ export default function LearningSession() {
     }
   };
 
-  const msgColor = { ai: '#1E293B', learner: '#0F2A1E', advance_trigger: '#0F3A10', loop_trigger: '#2A1A0A', mastery_check: '#1A1A3A' };
-  const msgTextColor = { ai: '#F1F5F9', learner: '#D1FAE5', advance_trigger: '#10B981', loop_trigger: '#FBBF24', mastery_check: '#C4B5FD' };
+  const bubbleBorder = {
+    mastery_check: '1px solid #8B6BD1',
+    advance_trigger: '1px solid var(--status-success)',
+    loop_trigger: '1px solid var(--status-warning)'
+  };
+  const bubbleText = {
+    advance_trigger: 'var(--status-success)',
+    loop_trigger: 'var(--status-warning)',
+    mastery_check: '#8B6BD1'
+  };
 
   return (
     <div style={S.page}>
-      {/* Header */}
       <div style={S.header}>
         <div style={S.headerLeft}>
-          <button style={S.backBtn} onClick={() => navigate('/learn/dashboard')}>←</button>
+          <button style={S.backBtn} onClick={() => navigate('/learn/dashboard')} aria-label="Back to dashboard">←</button>
           <div>
             <div style={S.nodeTitle}>{nodeLabel}</div>
-            <div style={S.clusterTitle}>{clusterLabel}</div>
+            <div className="small text-faint">{clusterLabel}</div>
           </div>
         </div>
-        <div style={S.headerRight}>
-          <div style={S.approachBadge}>{APPROACH_NAMES[approach]}</div>
-          <div style={S.langBadge}>{langName}</div>
-          {loopCount > 0 && <div style={S.loopBadge}>Loop {loopCount}</div>}
+        <div className="row gap-2">
+          <span className="badge badge-accent">{APPROACH_NAMES[approach]}</span>
+          <span className="badge badge-success">{langName}</span>
+          {loopCount > 0 && <span className="badge badge-warning">Loop {loopCount}</span>}
         </div>
       </div>
 
-      {/* Phase indicator */}
       {phase === 'mastery_check' && (
         <div style={S.checkBanner}>
           {lang === 'hindi' ? '📝 मास्टरी चेक — अपना उत्तर लिखें' : '📝 మాస్టరీ చెక్ — మీ సమాధానం రాయండి'}
         </div>
       )}
 
-      {/* Messages */}
       <div style={S.chatArea}>
-        {error && <div style={S.errorMsg}>{error}</div>}
+        {error && <div className="badge badge-danger" style={{ display: 'block', padding: 'var(--space-3)' }}>{error}</div>}
         {messages.map((msg, i) => (
-          <div key={i} style={{ ...S.msgWrap, justifyContent: msg.role === 'learner' ? 'flex-end' : 'flex-start' }}>
+          <div key={i} className="msg-enter" style={{ display: 'flex', justifyContent: msg.role === 'learner' ? 'flex-end' : 'flex-start' }}>
             <div style={{
-              ...S.bubble,
-              background: msgColor[msg.type] || (msg.role === 'learner' ? '#0F2A1E' : '#1E293B'),
-              color: msgTextColor[msg.type] || (msg.role === 'learner' ? '#D1FAE5' : '#F1F5F9'),
+              maxWidth: '80%',
+              padding: 'var(--space-4) var(--space-5)',
               borderRadius: msg.role === 'learner' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-              border: msg.type === 'mastery_check' ? '1px solid #6D28D9' :
-                      msg.type === 'advance_trigger' ? '1px solid #10B981' :
-                      msg.type === 'loop_trigger' ? '1px solid #F59E0B' : '1px solid #334155'
+              background: msg.role === 'learner' ? 'var(--gradient-accent)' : 'var(--color-surface)',
+              color: msg.role === 'learner' ? '#FFF8EE' : (bubbleText[msg.type] || 'var(--color-text)'),
+              border: msg.role === 'learner' ? 'none' : (bubbleBorder[msg.type] || '1px solid var(--color-border)'),
+              boxShadow: msg.role === 'learner' ? 'var(--shadow-accent-glow)' : 'var(--shadow-sm)'
             }}>
               {msg.role === 'ai' && <div style={S.aiLabel}>PROFESSOR QUBIREX</div>}
               <div style={S.msgText}>{msg.content}</div>
@@ -167,22 +172,22 @@ export default function LearningSession() {
           </div>
         ))}
         {loading && (
-          <div style={S.msgWrap}>
-            <div style={{ ...S.bubble, background: '#1E293B' }}>
+          <div style={{ display: 'flex' }}>
+            <div className="card" style={{ padding: 'var(--space-4) var(--space-5)', boxShadow: 'var(--shadow-sm)' }}>
               <div style={S.aiLabel}>PROFESSOR QUBIREX</div>
-              <div style={S.typing}><span/><span/><span/></div>
+              <div className="typing"><span/><span/><span/></div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
       {phase !== 'result' ? (
         <div style={S.inputArea}>
-          <div style={S.inputRow}>
+          <div className="row gap-2" style={{ alignItems: 'flex-end' }}>
             <textarea
-              style={S.input}
+              className="textarea input"
+              style={{ flex: 1 }}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -193,7 +198,7 @@ export default function LearningSession() {
               rows={3}
               disabled={loading}
             />
-            <button style={S.sendBtn} onClick={sendMessage} disabled={loading || !input.trim()}>
+            <button className="btn btn-primary" style={{ height: 46 }} onClick={sendMessage} disabled={loading || !input.trim()}>
               {sendText}
             </button>
           </div>
@@ -201,21 +206,23 @@ export default function LearningSession() {
       ) : (
         <div style={S.resultArea}>
           {result?.programme_complete ? (
-            <div style={S.completeResult}>
-              🎓 {lang === 'hindi' ? 'कार्यक्रम पूरा!' : 'కార్యక్రమం పూర్తయింది!'}
-              <button style={S.dashBtn} onClick={() => navigate('/learn/dashboard')}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 'var(--text-h2)', fontWeight: 700, color: 'var(--status-success)', marginBottom: 'var(--space-3)' }}>
+                🎓 {lang === 'hindi' ? 'कार्यक्रम पूरा!' : 'కార్యక్రమం పూర్తయింది!'}
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate('/learn/dashboard')}>
                 {lang === 'hindi' ? 'डैशबोर्ड पर जाएं' : 'డాష్‌బోర్డ్‌కి వెళ్ళండి'}
               </button>
             </div>
           ) : (
-            <div style={S.advanceResult}>
-              <div style={{ color: '#10B981', fontSize: 18, fontWeight: 700, marginBottom: 8 }}>
+            <div className="card" style={{ textAlign: 'center', borderColor: 'var(--status-success)' }}>
+              <div style={{ color: 'var(--status-success)', fontSize: 'var(--text-h4)', fontWeight: 700, marginBottom: 'var(--space-2)' }}>
                 ✅ {lang === 'hindi' ? 'आगे बढ़ें' : 'ముందుకు వెళ్ళండి'}
               </div>
-              <div style={{ color: '#94A3B8', fontSize: 14, marginBottom: 16 }}>
-                {lang === 'hindi' ? 'अगला कौशल:' : 'తదుపరి నైపుణ్యం:'} <strong style={{ color: '#60A5FA' }}>{result?.next_node?.label}</strong>
+              <div className="small text-muted" style={{ marginBottom: 'var(--space-4)' }}>
+                {lang === 'hindi' ? 'अगला कौशल:' : 'తదుపరి నైపుణ్యం:'} <strong className="accent-text">{result?.next_node?.label}</strong>
               </div>
-              <button style={S.nextBtn} onClick={() => { setPhase('instruction'); startSession(); }}>
+              <button className="btn btn-primary" onClick={() => { setPhase('instruction'); startSession(); }}>
                 {lang === 'hindi' ? 'अगला कौशल शुरू करें →' : 'తదుపరి నైపుణ్యం మొదలుపెట్టండి →'}
               </button>
             </div>
@@ -225,40 +232,30 @@ export default function LearningSession() {
 
       <style>{`
         @keyframes bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
-        .typing span { display: inline-block; width: 8px; height: 8px; margin: 0 2px; background: #60A5FA; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .msg-enter { animation: msgIn 280ms ease both; }
+        .typing { display: flex; gap: 3px; padding: 4px 0; }
+        .typing span { display: inline-block; width: 8px; height: 8px; margin: 0 2px; background: var(--accent-500); border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
         .typing span:nth-child(1) { animation-delay: -0.32s; }
         .typing span:nth-child(2) { animation-delay: -0.16s; }
+        @media (prefers-reduced-motion: reduce) {
+          .msg-enter { animation: none; }
+        }
       `}</style>
     </div>
   );
 }
 
 const S = {
-  page: { height: '100vh', background: '#0F172A', fontFamily: 'Arial, sans-serif', display: 'flex', flexDirection: 'column' },
-  header: { background: '#1E293B', borderBottom: '1px solid #334155', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
+  page: { height: '100vh', background: 'var(--color-bg)', fontFamily: 'var(--font-body)', display: 'flex', flexDirection: 'column' },
+  header: { background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
-  backBtn: { background: 'none', border: 'none', color: '#3B82F6', fontSize: 20, cursor: 'pointer' },
-  nodeTitle: { color: '#F1F5F9', fontWeight: 700, fontSize: 15 },
-  clusterTitle: { color: '#64748B', fontSize: 12 },
-  headerRight: { display: 'flex', gap: 8, alignItems: 'center' },
-  approachBadge: { background: '#1E3A5F', color: '#60A5FA', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  langBadge: { background: '#0F3A2A', color: '#10B981', padding: '4px 12px', borderRadius: 20, fontSize: 14, fontWeight: 600 },
-  loopBadge: { background: '#2A1A0A', color: '#FBBF24', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 },
-  checkBanner: { background: '#1A1A3A', borderBottom: '1px solid #6D28D9', padding: '10px 20px', color: '#C4B5FD', fontSize: 14, fontWeight: 600, flexShrink: 0 },
-  chatArea: { flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: 12 },
-  errorMsg: { background: '#450A0A', border: '1px solid #7F1D1D', color: '#FCA5A5', padding: '10px 14px', borderRadius: 8, fontSize: 14 },
-  msgWrap: { display: 'flex' },
-  bubble: { maxWidth: '80%', padding: '14px 18px', lineHeight: 1 },
-  aiLabel: { color: '#3B82F6', fontSize: 10, fontWeight: 700, letterSpacing: 2, marginBottom: 6 },
+  backBtn: { background: 'none', border: 'none', color: 'var(--accent-ink)', fontSize: 20, cursor: 'pointer' },
+  nodeTitle: { fontWeight: 700, fontSize: 15 },
+  checkBanner: { background: 'rgba(139,107,209,0.12)', borderBottom: '1px solid #8B6BD1', padding: '10px 20px', color: '#8B6BD1', fontSize: 14, fontWeight: 600, flexShrink: 0 },
+  chatArea: { flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 12 },
+  aiLabel: { color: 'var(--accent-ink)', fontSize: 10, fontWeight: 700, letterSpacing: 2, marginBottom: 6 },
   msgText: { fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' },
-  typing: { display: 'flex', gap: 3, padding: '4px 0' },
-  inputArea: { background: '#1E293B', borderTop: '1px solid #334155', padding: '12px 16px', flexShrink: 0 },
-  inputRow: { display: 'flex', gap: 8, alignItems: 'flex-end' },
-  input: { flex: 1, background: '#0F172A', border: '1px solid #334155', color: '#F1F5F9', padding: '10px 14px', borderRadius: 10, fontSize: 15, lineHeight: 1.5, resize: 'none', fontFamily: 'Arial, sans-serif', outline: 'none' },
-  sendBtn: { background: '#3B82F6', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', height: 44, flexShrink: 0 },
-  resultArea: { background: '#1E293B', borderTop: '1px solid #334155', padding: '20px 24px', flexShrink: 0 },
-  completeResult: { color: '#10B981', fontSize: 20, fontWeight: 700, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
-  advanceResult: { background: '#0F2A1E', border: '1px solid #10B981', borderRadius: 12, padding: '20px 24px', textAlign: 'center' },
-  dashBtn: { background: '#10B981', color: 'white', border: 'none', padding: '11px 24px', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginTop: 8 },
-  nextBtn: { background: '#10B981', color: 'white', border: 'none', padding: '12px 28px', borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer' }
+  inputArea: { background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', padding: '12px 16px', flexShrink: 0 },
+  resultArea: { background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)', padding: '20px 24px', flexShrink: 0 }
 };

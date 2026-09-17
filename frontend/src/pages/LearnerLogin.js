@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import NavBar from '../components/NavBar';
+import Reveal from '../components/Reveal';
 
 export default function LearnerLogin() {
   const [ref, setRef] = useState('');
@@ -25,46 +27,38 @@ export default function LearnerLogin() {
     setLoading(false);
   };
 
-  const lang = { hindi: 'हिंदी', telugu: 'తెలుగు' };
-
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.logo}>QUBIREX</div>
-        <h2 style={styles.title}>Learner Login</h2>
-        <p style={styles.sub}>Enter your learner reference and engagement code</p>
-        {error && <div style={styles.error}>{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <label style={styles.label}>Learner Reference Number</label>
-          <input style={styles.input} value={ref} onChange={e => setRef(e.target.value)} placeholder="e.g. LRNR-001" required />
-          <label style={styles.label}>Engagement ID</label>
-          <input style={styles.input} value={engagementId} onChange={e => setEngagementId(e.target.value)} placeholder="Provided by your institution" required />
-          <button style={styles.btn} type="submit" disabled={loading}>
-            {loading ? 'Entering…' : 'Enter Learning Space'}
-          </button>
-        </form>
-        <div style={styles.langRow}>
-          <span style={styles.langTag}>हिंदी</span>
-          <span style={styles.langTag}>తెలుగు</span>
-        </div>
-        <p style={styles.switch}><a href="/login" style={styles.link}>← Institution Login</a></p>
-      </div>
-    </div>
+    <>
+      <NavBar />
+      <main style={{ position: 'relative', overflow: 'hidden', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-12) var(--gutter)' }}>
+        <div className="hero-wash" style={{ opacity: 0.6 }} />
+        <Reveal className="card" style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 420, padding: 'var(--space-10) var(--space-8)' }}>
+          <div className="caption accent-text" style={{ marginBottom: 'var(--space-2)' }}>QUBIREX</div>
+          <h2 style={{ marginBottom: 'var(--space-1)' }}>Learner Login</h2>
+          <p className="small text-muted" style={{ marginBottom: 'var(--space-6)' }}>Enter your learner reference and engagement code</p>
+          {error && <div className="badge badge-danger" style={{ display: 'block', marginBottom: 'var(--space-4)', padding: 'var(--space-3)' }}>{error}</div>}
+          <form onSubmit={handleSubmit}>
+            <div className="field">
+              <label className="label">Learner Reference Number</label>
+              <input className="input" value={ref} onChange={e => setRef(e.target.value)} placeholder="e.g. LRNR-001" required />
+            </div>
+            <div className="field">
+              <label className="label">Engagement ID</label>
+              <input className="input" value={engagementId} onChange={e => setEngagementId(e.target.value)} placeholder="Provided by your institution" required />
+            </div>
+            <button className="btn btn-primary btn-block" type="submit" disabled={loading} style={{ marginTop: 'var(--space-8)' }}>
+              {loading ? 'Entering…' : 'Enter Learning Space'}
+            </button>
+          </form>
+          <div className="row gap-2" style={{ justifyContent: 'center', marginTop: 'var(--space-6)' }}>
+            <span className="badge badge-accent">हिंदी</span>
+            <span className="badge badge-accent">తెలుగు</span>
+          </div>
+          <p className="small text-muted" style={{ textAlign: 'center', marginTop: 'var(--space-5)' }}>
+            <a href="/login" className="accent-text" style={{ fontWeight: 600 }}>← Institution Login</a>
+          </p>
+        </Reveal>
+      </main>
+    </>
   );
 }
-
-const styles = {
-  page: { minHeight: '100vh', background: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Arial, sans-serif' },
-  card: { background: '#1E293B', border: '1px solid #334155', borderRadius: 16, padding: 40, width: '100%', maxWidth: 420 },
-  logo: { color: '#10B981', fontSize: 28, fontWeight: 800, letterSpacing: 4, marginBottom: 8 },
-  title: { color: '#F1F5F9', fontSize: 22, fontWeight: 700, margin: '0 0 4px' },
-  sub: { color: '#64748B', fontSize: 13, margin: '0 0 24px' },
-  error: { background: '#450A0A', border: '1px solid #7F1D1D', color: '#FCA5A5', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 14 },
-  label: { display: 'block', color: '#94A3B8', fontSize: 13, marginBottom: 6, marginTop: 16 },
-  input: { width: '100%', background: '#0F172A', border: '1px solid #334155', color: '#F1F5F9', padding: '10px 12px', borderRadius: 8, fontSize: 15, boxSizing: 'border-box' },
-  btn: { width: '100%', background: '#10B981', color: 'white', border: 'none', padding: '12px', borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer', marginTop: 24 },
-  langRow: { display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 },
-  langTag: { background: '#0F3A2A', color: '#10B981', padding: '5px 14px', borderRadius: 20, fontSize: 15, fontWeight: 600 },
-  switch: { color: '#64748B', fontSize: 13, textAlign: 'center', marginTop: 16 },
-  link: { color: '#3B82F6', textDecoration: 'none' }
-};

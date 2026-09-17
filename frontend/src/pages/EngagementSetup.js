@@ -1,7 +1,9 @@
 // src/pages/EngagementSetup.js
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../utils/api';
+import NavBar from '../components/NavBar';
+import Reveal from '../components/Reveal';
 
 export default function EngagementSetup() {
   const navigate = useNavigate();
@@ -23,7 +25,7 @@ export default function EngagementSetup() {
     setLoading(true); setError('');
     try {
       // Register learners first
-      const bulkRes = await api.post('/institution/learners/bulk', {
+      await api.post('/institution/learners/bulk', {
         learners: learners.filter(l => l.name && l.learner_ref).map(l => ({ ...l, language }))
       });
 
@@ -45,54 +47,56 @@ export default function EngagementSetup() {
   };
 
   return (
-    <div style={S.page}>
-      <div style={S.container}>
-        <div style={S.back} onClick={() => navigate('/institution/dashboard')}>← Dashboard</div>
-        <h1 style={S.h1}>Setup Engagement</h1>
-        {error && <div style={S.error}>{error}</div>}
-        <form onSubmit={handleSubmit}>
-          <label style={S.label}>Engagement Title</label>
-          <input style={S.input} value={title} onChange={e => setTitle(e.target.value)} required />
-          <label style={S.label}>Language of Instruction</label>
-          <div style={S.langRow}>
-            {['telugu', 'hindi'].map(lang => (
-              <button key={lang} type="button" style={{ ...S.langBtn, ...(language === lang ? S.langBtnActive : {}) }} onClick={() => setLanguage(lang)}>
-                {lang === 'hindi' ? 'हिंदी Hindi' : 'తెలుగు Telugu'}
-              </button>
-            ))}
-          </div>
-          <h3 style={S.h3}>Add Learners</h3>
-          {learners.map((l, i) => (
-            <div key={i} style={S.learnerRow}>
-              <input style={S.inputSm} placeholder="Name" value={l.name} onChange={e => updateLearner(i, 'name', e.target.value)} />
-              <input style={S.inputSm} placeholder="Ref No (e.g. LRNR-001)" value={l.learner_ref} onChange={e => updateLearner(i, 'learner_ref', e.target.value)} />
-              <input style={S.inputSm} placeholder="Email (optional)" value={l.email} onChange={e => updateLearner(i, 'email', e.target.value)} />
+    <>
+      <NavBar />
+      <main className="container" style={{ padding: 'var(--space-12) var(--gutter) var(--space-20)', flex: 1, width: '100%' }}>
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <div className="small accent-text" style={{ cursor: 'pointer', marginBottom: 'var(--space-6)', fontWeight: 600 }} onClick={() => navigate('/institution/dashboard')}>← Dashboard</div>
+          <Reveal><h1 style={{ marginBottom: 'var(--space-6)' }}>Setup Engagement</h1></Reveal>
+          {error && <div className="badge badge-danger" style={{ display: 'block', padding: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>{error}</div>}
+          <Reveal delay={80} as="form" onSubmit={handleSubmit}>
+            <div className="field" style={{ marginTop: 0 }}>
+              <label className="label">Engagement Title</label>
+              <input className="input" value={title} onChange={e => setTitle(e.target.value)} required />
             </div>
-          ))}
-          <button type="button" style={S.addBtn} onClick={addLearner}>+ Add Learner</button>
-          <button type="submit" style={S.submitBtn} disabled={loading}>
-            {loading ? 'Starting…' : 'Start Engagement →'}
-          </button>
-        </form>
-      </div>
-    </div>
+
+            <div className="field">
+              <label className="label">Language of Instruction</label>
+              <div className="row gap-3">
+                {['telugu', 'hindi'].map(lang => (
+                  <button
+                    key={lang}
+                    type="button"
+                    className="card"
+                    style={{
+                      flex: 1, textAlign: 'center', cursor: 'pointer', padding: 'var(--space-4)',
+                      ...(language === lang ? { borderColor: 'var(--accent-ink)', background: 'var(--accent-50)', color: 'var(--accent-ink)', fontWeight: 700 } : { color: 'var(--color-text-muted)' })
+                    }}
+                    onClick={() => setLanguage(lang)}
+                  >
+                    {lang === 'hindi' ? 'हिंदी Hindi' : 'తెలుగు Telugu'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <h3 style={{ margin: 'var(--space-8) 0 var(--space-3)' }}>Add Learners</h3>
+            <div className="stack gap-2" style={{ marginBottom: 'var(--space-4)' }}>
+              {learners.map((l, i) => (
+                <div key={i} className="row gap-2">
+                  <input className="input" placeholder="Name" value={l.name} onChange={e => updateLearner(i, 'name', e.target.value)} />
+                  <input className="input" placeholder="Ref No (e.g. LRNR-001)" value={l.learner_ref} onChange={e => updateLearner(i, 'learner_ref', e.target.value)} />
+                  <input className="input" placeholder="Email (optional)" value={l.email} onChange={e => updateLearner(i, 'email', e.target.value)} />
+                </div>
+              ))}
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ borderStyle: 'dashed', marginBottom: 'var(--space-8)' }} onClick={addLearner}>+ Add Learner</button>
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
+              {loading ? 'Starting…' : 'Start Engagement →'}
+            </button>
+          </Reveal>
+        </div>
+      </main>
+    </>
   );
 }
-
-const S = {
-  page: { minHeight: '100vh', background: '#0F172A', fontFamily: 'Arial, sans-serif', padding: 24 },
-  container: { maxWidth: 700, margin: '0 auto' },
-  back: { color: '#3B82F6', cursor: 'pointer', fontSize: 14, marginBottom: 24 },
-  h1: { color: '#F1F5F9', fontSize: 24, fontWeight: 800, margin: '0 0 24px' },
-  h3: { color: '#F1F5F9', fontSize: 16, fontWeight: 700, margin: '24px 0 12px' },
-  error: { background: '#450A0A', color: '#FCA5A5', padding: '10px 14px', borderRadius: 8, marginBottom: 16 },
-  label: { display: 'block', color: '#94A3B8', fontSize: 13, marginBottom: 6, marginTop: 20 },
-  input: { width: '100%', background: '#0F172A', border: '1px solid #334155', color: '#F1F5F9', padding: '10px 12px', borderRadius: 8, fontSize: 15, boxSizing: 'border-box' },
-  inputSm: { flex: 1, background: '#0F172A', border: '1px solid #334155', color: '#F1F5F9', padding: '9px 11px', borderRadius: 7, fontSize: 14 },
-  langRow: { display: 'flex', gap: 12, marginTop: 8 },
-  langBtn: { flex: 1, background: '#1E293B', border: '1px solid #334155', color: '#94A3B8', padding: '12px', borderRadius: 8, cursor: 'pointer', fontSize: 15 },
-  langBtnActive: { background: '#0F3A2A', border: '1px solid #10B981', color: '#10B981' },
-  learnerRow: { display: 'flex', gap: 8, marginBottom: 8 },
-  addBtn: { background: 'transparent', border: '1px dashed #334155', color: '#64748B', padding: '8px 16px', borderRadius: 7, cursor: 'pointer', fontSize: 13, marginBottom: 24 },
-  submitBtn: { width: '100%', background: '#3B82F6', color: 'white', border: 'none', padding: '13px', borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: 'pointer' }
-};
