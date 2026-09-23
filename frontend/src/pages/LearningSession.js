@@ -11,6 +11,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { MOCK_SESSION_START } from '../utils/mockData';
+import { MOCK_FALLBACK_ALLOWED } from '../utils/devFallback';
+import Mermaid from '../components/Mermaid';
+import CodeBlock from '../components/CodeBlock';
 
 const APPROACH_NAMES = {
   native_concept: 'Native Concept',
@@ -66,17 +69,21 @@ export default function LearningSession() {
         setMessages([{ role: 'ai', content: res.data.message, type: 'diagnosis' }]);
       }
     } catch (err) {
-      // dev fallback — no backend reachable, load a sample conversation instead of a dead end
-      setError('');
-      const mock = MOCK_SESSION_START;
-      setSessionId(mock.session_id);
-      setNodeLabel(mock.node_label);
-      setClusterLabel(mock.cluster_label);
-      setApproach(mock.approach);
-      setLoopCount(mock.loop_count);
-      setPhase('instruction');
-      setResult(null);
-      setMessages(mock.history.map(m => ({ role: m.role, content: m.content, type: m.type })));
+      if (MOCK_FALLBACK_ALLOWED) {
+        // dev fallback — no backend reachable, load a sample conversation instead of a dead end
+        setError('');
+        const mock = MOCK_SESSION_START;
+        setSessionId(mock.session_id);
+        setNodeLabel(mock.node_label);
+        setClusterLabel(mock.cluster_label);
+        setApproach(mock.approach);
+        setLoopCount(mock.loop_count);
+        setPhase('instruction');
+        setResult(null);
+        setMessages(mock.history.map(m => ({ role: m.role, content: m.content, type: m.type })));
+      } else {
+        setError('Could not start your session. Please try again shortly.');
+      }
     }
     setLoading(false);
   };
@@ -102,7 +109,10 @@ export default function LearningSession() {
         setApproach(res.data.next_approach);
         setPhase('instruction');
       } else {
-        setMessages(prev => [...prev, { role: 'ai', content: res.data.message, type: res.data.decision === 'CHECK' ? 'mastery_check' : 'instruction' }]);
+        setMessages(prev => [...prev, {
+          role: 'ai', content: res.data.message, type: res.data.decision === 'CHECK' ? 'mastery_check' : 'instruction',
+          mermaid: res.data.mermaid || null, code: res.data.code || null
+        }]);
         if (res.data.approach) setApproach(res.data.approach);
         setPhase(res.data.decision === 'CHECK' ? 'mastery_check' : 'instruction');
       }
@@ -168,6 +178,8 @@ export default function LearningSession() {
             }}>
               {msg.role === 'ai' && <div style={S.aiLabel}>PROFESSOR QUBIREX</div>}
               <div style={S.msgText}>{msg.content}</div>
+              {msg.code && <CodeBlock code={msg.code} />}
+              {msg.mermaid && <Mermaid chart={msg.mermaid} />}
             </div>
           </div>
         ))}

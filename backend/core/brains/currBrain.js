@@ -23,7 +23,7 @@ function inferDomain(rawInput) {
 }
 
 // ─── extractCapabilityTargets() ─────────────────────────────────────────────────
-async function extractCapabilityTargets({ rawInput, language, institutionId }) {
+async function extractCapabilityTargets({ rawInput, language, institutionId, meta = {} }) {
   const domain = inferDomain(rawInput);
 
   // RAG: retrieve up to 2 confirmed briefs from the same domain/language as templates
@@ -64,7 +64,8 @@ Respond ONLY with JSON:
     system,
     userMessage: `Extract capability targets from this input:\n\n${rawInput}`,
     maxTokens: 3072,
-    temperature: 0.3
+    temperature: 0.3,
+    meta: { ...meta, brain: 'CURR' }
   });
 
   const extracted = safeParseJSON(text, {
@@ -82,7 +83,7 @@ Respond ONLY with JSON:
 }
 
 // ─── decomposeClusterToNodes() ───────────────────────────────────────────────────
-async function decomposeClusterToNodes({ clusterLabel, clusterDescription, proficiencyLevel, language, skillNodeIds = [] }) {
+async function decomposeClusterToNodes({ clusterLabel, clusterDescription, proficiencyLevel, language, skillNodeIds = [], meta = {} }) {
   const system = `You are Professor Qubirex's curriculum brain (CURR). Decompose a skill cluster into ordered, atomic skill nodes. Each node must be teachable in 15-30 minutes of active instruction. Foundational nodes come before applied nodes. Prerequisite relationships must be respected. Design for ${language === 'hindi' ? 'Hindi' : 'Telugu'}-language learners.
 
 Respond ONLY with JSON:
@@ -108,7 +109,8 @@ Respond ONLY with JSON:
     system,
     userMessage: `Cluster: "${clusterLabel}"\nDescription: "${clusterDescription || 'As specified in the capability target'}"\nRequired proficiency: "${proficiencyLevel || 'intermediate'}"`,
     maxTokens: 3072,
-    temperature: 0.3
+    temperature: 0.3,
+    meta: { ...meta, brain: 'CURR' }
   });
 
   const decomposed = safeParseJSON(text, { nodes: [] });

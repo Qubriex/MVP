@@ -2,11 +2,15 @@
 
 **Inferexaa Private Limited · Receive. Build. Return.**
 
-The only platform that teaches technical skills in Telugu, and proves they were
-learned — with a Mastery Log, not a certificate. Qubirex constructs
-explanations natively in Telugu or Hindi (never translated from English) via
-Professor Qubirex, its AI teaching persona, and returns a verified Mastery Log
-per learner to the commissioning institution.
+Qubirex teaches technical skills natively in Telugu or Hindi (never translated
+from English) via Professor Qubirex, its AI teaching persona, and returns an
+Evidence-Based Mastery Log per learner to the commissioning institution —
+evidence of what was worked through, not a certificate or a readiness
+classification. Readiness and external scoring are the commissioning client's
+to determine; see "The Two Blank Fields" below. "Verified Mastery" is reserved
+for once mastery checks run against independent validation (see "Assessment
+Method" below) across a node's full concept coverage, not just the pilot's
+Python/SQL bundle.
 
 ---
 
@@ -171,10 +175,13 @@ Frontend runs on http://localhost:3000
 
 ### Seed Admin User
 
+The first admin account is created via a CLI script (server shell access
+only) — not an HTTP route, since an HTTP bootstrap endpoint authorized by a
+request-body secret is reachable by anyone who can guess or intercept it:
+
 ```bash
-curl -X POST http://localhost:3001/api/admin/seed-admin \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@inferexaa.com","password":"your_password","secret":"your_jwt_secret"}'
+cd backend
+node scripts/seed-admin.js admin@inferexaa.com your_password
 ```
 
 ---
@@ -193,6 +200,20 @@ curl -X POST http://localhost:3001/api/admin/seed-admin \
 Score ≥ 0.70 = ADVANCE. Exception: loop count ≥ 5 and score ≥ 0.60 = ADVANCE
 (persistence credit). A learner who submits ANY response without
 demonstrating understanding does NOT advance.
+
+### Assessment method
+
+Most nodes are still scored by the LLM alone (`graded_by: 'llm_only'` on the
+`mastery_checks` row) — an AI judging a response to a question the same AI
+posed. For the pilot's Python/SQL concept tags (see
+`core/stores/codeChallengeStore.js`), the mastery check is instead run as
+code against hidden test cases in a sandbox (`core/sandbox/`); the pass
+fraction from that run — not an LLM opinion — is the score
+(`graded_by: 'sandbox'`). The Mastery Log surfaces this per node as
+`assessment_method: 'sandbox_verified' | 'ai_evaluated'`, so which claim a
+given node supports is visible in the document itself, not just in this
+README. See `core/sandbox/pythonSandbox.js` for the isolation model and its
+documented limits before treating this as safe for an adversarial audience.
 
 **Mastery increment on ADVANCE** (rewards prompt mastery):
 

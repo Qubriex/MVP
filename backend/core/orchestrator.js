@@ -81,6 +81,11 @@ async function processMessage(params) {
     clusterLabel, language, learnerMessage, sessionState = {}
   } = params;
 
+  // Every callAI() made while handling this one learner-turn shares this id,
+  // so cost/latency can be grouped per turn (see ai_call_log / instructionEngine.js).
+  const turnId = uuidv4();
+  const meta = { turnId, sessionId, learnerId, nodeId };
+
   let result;
   let brainsActivated;
 
@@ -96,7 +101,7 @@ async function processMessage(params) {
       ]);
 
       brainsActivated.push('TEACH');
-      const diagnosis = await teachBrain.runDiagnosis({ nodeLabel, clusterLabel, language, learnerContext });
+      const diagnosis = await teachBrain.runDiagnosis({ nodeLabel, clusterLabel, language, learnerContext, meta });
 
       await memBrain.writeAfterTurn(learnerId, engagementLearnerId, {
         role: 'ai', content: diagnosis.message, nodeId, clusterId: sessionState.clusterId,
@@ -125,7 +130,7 @@ async function processMessage(params) {
         nodeLabel, clusterLabel, language, approach,
         approachesAlreadyUsed: sessionState.approachesUsed || [],
         conversationHistory: _buildHistory(learnerContext, learnerMessage),
-        loopCount: 0, behaviourSignal: 'engaged', learnerContext, culturalExamples, nodeSpec
+        loopCount: 0, behaviourSignal: 'engaged', learnerContext, culturalExamples, nodeSpec, meta
       });
 
       await _writeTurn(learnerId, engagementLearnerId, nodeId, sessionState.clusterId, learnerMessage, instruction.message, {
@@ -154,7 +159,7 @@ async function processMessage(params) {
         conversationHistory: _buildHistory(learnerContext, learnerMessage),
         loopCount: sessionState.loopCount || 0,
         behaviourSignal: sessionState.behaviourSignal || 'engaged',
-        learnerContext, culturalExamples, nodeSpec
+        learnerContext, culturalExamples, nodeSpec, meta
       });
 
       await _writeTurn(learnerId, engagementLearnerId, nodeId, sessionState.clusterId, learnerMessage, instruction.message, {
@@ -173,7 +178,7 @@ async function processMessage(params) {
         Promise.resolve(memBrain.retrieve(learnerId, nodeId)),
         evalBrain.evaluate({
           nodeLabel, language, question: sessionState.checkQuestion,
-          learnerResponse: learnerMessage, loopCount: sessionState.loopCount || 0
+          learnerResponse: learnerMessage, loopCount: sessionState.loopCount || 0, meta
         }),
         Promise.resolve(cultBrain.retrieveExamples(nodeLabel, language, _vocabHint(sessionState))),
         Promise.resolve(currBrain.retrieveNodeContext(nodeId, nodeLabel))
@@ -188,7 +193,7 @@ async function processMessage(params) {
           approachesAlreadyUsed: sessionState.approachesUsed || [],
           conversationHistory: _buildHistory(learnerContext, learnerMessage),
           loopCount: sessionState.loopCount || 0, behaviourSignal: 'accelerating',
-          learnerContext, culturalExamples, nodeSpec
+          learnerContext, culturalExamples, nodeSpec, meta
         });
 
         await _writeTurn(learnerId, engagementLearnerId, nodeId, sessionState.clusterId, learnerMessage, advanceMessage.message, {
@@ -208,7 +213,7 @@ async function processMessage(params) {
           approachesAlreadyUsed: sessionState.approachesUsed || [],
           conversationHistory: _buildHistory(learnerContext, learnerMessage),
           loopCount: newLoopCount, behaviourSignal: 'confused',
-          learnerContext, culturalExamples, nodeSpec
+          learnerContext, culturalExamples, nodeSpec, meta
         });
 
         memBrain.writeStruggle(learnerId, engagementLearnerId, {
@@ -237,7 +242,7 @@ async function processMessage(params) {
 
       brainsActivated.push('TEACH');
       const doubtAnswer = await teachBrain.answerDoubt({
-        questionText: learnerMessage, nodeLabel, clusterLabel, language, learnerContext, culturalExamples
+        questionText: learnerMessage, nodeLabel, clusterLabel, language, learnerContext, culturalExamples, meta
       });
 
       await memBrain.writeAfterTurn(learnerId, engagementLearnerId, {

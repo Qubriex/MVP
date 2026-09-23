@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { MOCK_ENGAGEMENT_DETAIL, MOCK_MASTERY_LOGS } from '../utils/mockData';
+import { MOCK_FALLBACK_ALLOWED } from '../utils/devFallback';
 import NavBar from '../components/NavBar';
 import Reveal from '../components/Reveal';
 
@@ -15,6 +16,7 @@ export default function EngagementDetail() {
   const [loading, setLoading] = useState(true);
   const [producing, setProducing] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     // dev fallback — an unreachable backend can resolve with a 200 HTML page
@@ -24,10 +26,14 @@ export default function EngagementDetail() {
         if (!r.data || typeof r.data !== 'object' || !r.data.id) throw new Error('unexpected response shape');
         setData(r.data); setLoading(false);
       })
-      .catch(() => { setData({ ...MOCK_ENGAGEMENT_DETAIL, id }); setLoading(false); });
+      .catch(() => {
+        if (MOCK_FALLBACK_ALLOWED) setData({ ...MOCK_ENGAGEMENT_DETAIL, id });
+        else setError('Could not load this engagement. Please try again shortly.');
+        setLoading(false);
+      });
     api.get(`/institution/engagements/${id}/mastery-logs`)
       .then(r => { if (!Array.isArray(r.data)) throw new Error('unexpected response shape'); setLogs(r.data); })
-      .catch(() => setLogs(MOCK_MASTERY_LOGS));
+      .catch(() => { if (MOCK_FALLBACK_ALLOWED) setLogs(MOCK_MASTERY_LOGS); });
   }, [id]);
 
   const produceLogs = async () => {
@@ -38,7 +44,7 @@ export default function EngagementDetail() {
       if (!Array.isArray(res.data)) throw new Error('unexpected response shape');
       setLogs(res.data);
     } catch {
-      setLogs(MOCK_MASTERY_LOGS); // dev fallback — no backend reachable
+      if (MOCK_FALLBACK_ALLOWED) setLogs(MOCK_MASTERY_LOGS);
     }
     setProducing(false);
   };
@@ -49,6 +55,17 @@ export default function EngagementDetail() {
         <NavBar />
         <main className="container" style={{ padding: 'var(--space-16) var(--gutter)', flex: 1 }}>
           <p className="text-muted">Loading…</p>
+        </main>
+      </>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <>
+        <NavBar />
+        <main className="container" style={{ padding: 'var(--space-16) var(--gutter)', flex: 1 }}>
+          <p style={{ color: 'var(--status-danger)' }}>{error || 'Engagement not found'}</p>
         </main>
       </>
     );

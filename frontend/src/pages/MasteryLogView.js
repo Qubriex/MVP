@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { MOCK_MASTERY_LOG } from '../utils/mockData';
+import { MOCK_FALLBACK_ALLOWED } from '../utils/devFallback';
 import NavBar from '../components/NavBar';
 import Reveal from '../components/Reveal';
 
@@ -20,7 +21,10 @@ export default function MasteryLogView() {
       if (!r.data || !r.data.log_data || !Array.isArray(r.data.log_data.clusters)) throw new Error('unexpected response shape');
       setLog(r.data.log_data);
       setLoading(false);
-    }).catch(() => { setLog(MOCK_MASTERY_LOG); setLoading(false); });
+    }).catch(() => {
+      if (MOCK_FALLBACK_ALLOWED) setLog(MOCK_MASTERY_LOG);
+      setLoading(false); // else: falls through to the existing "Log not found" state below
+    });
   }, [logId]);
 
   if (loading || !log) {
