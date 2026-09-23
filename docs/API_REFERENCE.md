@@ -12,7 +12,7 @@ All protected routes require: `Authorization: Bearer <token>`
 |---|---|---|---|
 | POST | `/auth/institution/login` | `{email, password}` | Institution login |
 | POST | `/auth/institution/register` | `{name, type, contact_email, password, city?}` | Register institution |
-| POST | `/auth/learner/login` | `{learner_ref, engagement_id}` | Learner login |
+| POST | `/auth/learner/login` | `{learner_ref, engagement_id, pin}` | Learner login. `pin` is the secret factor — `learner_ref` and `engagement_id` are both shared across a cohort, so neither is sufficient alone. |
 | POST | `/auth/admin/login` | `{email, password}` | Admin login |
 
 ---
@@ -23,8 +23,8 @@ All protected routes require: `Authorization: Bearer <token>`
 |---|---|---|
 | GET | `/institution/profile` | Get institution profile |
 | GET | `/institution/learners` | List all learners |
-| POST | `/institution/learners` | Add single learner |
-| POST | `/institution/learners/bulk` | `{learners:[]}` — Bulk add |
+| POST | `/institution/learners` | Add single learner. Response includes `pin` (the login PIN) — shown once, not retrievable afterward. |
+| POST | `/institution/learners/bulk` | `{learners:[]}` — Bulk add. Response includes a `learners` array of `{learner_ref, pin}` (or `{learner_ref, skipped: true}` for a duplicate) — shown once, not retrievable afterward. |
 | POST | `/institution/capability-targets` | `{title, path, raw_input, language}` — Upload brief (Path A structured or Path B any-format, via CURR) |
 | POST | `/institution/capability-targets/:id/confirm` | Confirm Path B extraction — also confirms the CURR brief-store template |
 | POST | `/institution/capability-targets/:id/build-pathway` | `{language}` — CURR decomposes clusters into skill nodes + writes node specs |
@@ -114,7 +114,8 @@ All protected routes require: `Authorization: Bearer <token>`
 | GET | `/admin/institutions` | All institutions |
 | GET | `/admin/mastery-logs/:id` | Get a specific Mastery Log |
 | GET | `/admin/quality-report` | Node difficulty + approach effectiveness |
-| POST | `/admin/seed-admin` | `{email, password, secret}` — Create admin |
+
+The first admin account is created via `node scripts/seed-admin.js` (server shell access only), not an HTTP route.
 
 ---
 

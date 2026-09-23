@@ -1,26 +1,16 @@
 // api/routes/admin.js — Inferexaa admin portal (Qubirex platform)
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../../db/init');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { getMasteryLog } = require('../../core/masteryLog');
 
 const router = express.Router();
 
-// ─── Seed initial admin — public, gated by JWT_SECRET, not a token ────────────
-// Must be registered before the auth middleware below: this is how the very
-// first admin account gets created, so it cannot itself require an admin token.
-router.post('/seed-admin', (req, res) => {
-  const { email, password, secret } = req.body;
-  if (secret !== process.env.JWT_SECRET) return res.status(403).json({ error: 'Invalid secret' });
-  const db = getDb();
-  const id = uuidv4();
-  const hash = bcrypt.hashSync(password, 10);
-  db.prepare('INSERT OR IGNORE INTO admin_users (id, email, password_hash, name) VALUES (?, ?, ?, ?)').run(id, email, hash, 'Admin');
-  db.close();
-  res.json({ message: 'Admin created' });
-});
+// The first admin account is created via `node scripts/seed-admin.js`
+// (server shell access only) — never as an HTTP route. An HTTP bootstrap
+// route, even one gated by comparing a request-body value to JWT_SECRET,
+// means anyone who can guess or intercept that secret can mint themselves
+// an admin account over the network.
 
 router.use(authenticateToken);
 router.use(requireRole('admin'));

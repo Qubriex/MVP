@@ -9,9 +9,11 @@ const AuthContext = createContext(null);
 // "institution" on load, and DevNav (src/components/DevNav.js) lets the
 // tester flip to "learner" to reach the learner-only routes. Real login via
 // InstitutionLogin/LearnerLogin still works and overrides the dev session.
-// Set DEV_MODE to false (or delete this block) to restore the login-gated
-// flow before shipping to production.
-const DEV_MODE = true;
+//
+// Defaults to OFF (real login-gated flow). To re-enable for local layout
+// review, set REACT_APP_DEV_MODE=true in frontend/.env.development.local —
+// never in a committed .env file, so it can't leak into a deployed build.
+const DEV_MODE = process.env.REACT_APP_DEV_MODE === 'true';
 const DEV_USERS = {
   institution: { token: 'dev-institution-token', role: 'institution', user: { id: 'dev-inst-1', name: 'Demo Institution (dev)' } },
   learner: { token: 'dev-learner-token', role: 'learner', user: { id: 'dev-learner-1', name: 'Demo Learner (dev)', language: 'telugu' } }
