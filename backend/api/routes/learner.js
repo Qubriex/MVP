@@ -9,6 +9,7 @@ const orchestrator = require('../../core/orchestrator');
 const { initMemorySchema } = require('../../core/stores/learnerMemoryStore');
 const { initCulturalSchema, seedInitialExamples } = require('../../core/stores/culturalStore');
 const { initRubricSchema } = require('../../core/stores/rubricStore');
+const { seedChallenges } = require('../../core/stores/codeChallengeStore');
 const { calculateMasteryAttainment, calculateConfidenceIndicator, selectNextApproach } = require('../../core/instructionEngine');
 
 const router = express.Router();
@@ -21,6 +22,7 @@ const router = express.Router();
   initCulturalSchema(db);
   initRubricSchema(db);
   seedInitialExamples(db);
+  seedChallenges(db);
   db.close();
 })();
 
@@ -285,9 +287,14 @@ function handleCheckResult({ res, session, result, learnerResponse, pendingCheck
   const evaluation = result.evaluation;
 
   db.prepare(`
-    UPDATE mastery_checks SET learner_response = ?, passed = ?, score = ?, ai_evaluation = ?, evaluated_at = datetime('now')
+    UPDATE mastery_checks SET learner_response = ?, passed = ?, score = ?, ai_evaluation = ?,
+      graded_by = ?, sandbox_result = ?, evaluated_at = datetime('now')
     WHERE id = ?
-  `).run(learnerResponse, evaluation.passed ? 1 : 0, evaluation.score, evaluation.evaluation, pendingCheck.id);
+  `).run(
+    learnerResponse, evaluation.passed ? 1 : 0, evaluation.score, evaluation.evaluation,
+    evaluation.gradedBy || 'llm_only', evaluation.sandboxResult ? JSON.stringify(evaluation.sandboxResult) : null,
+    pendingCheck.id
+  );
 
   db.prepare(`
     INSERT INTO session_messages (id, session_id, role, content, message_type)
@@ -350,6 +357,7 @@ function handleCheckResult({ res, session, result, learnerResponse, pendingCheck
       feedback: evaluation.feedbackForLearner, message: result.message,
       mastery_increment: result.masteryIncrement, mastery_attainment: Math.round(masteryAttainment * 100),
       confidence_indicator: parseFloat(confidenceIndicator.toFixed(2)),
+      graded_by: evaluation.gradedBy || 'llm_only', sandbox_result: evaluation.sandboxResult || null,
       next_node: advanceTo ? { id: advanceTo.id, label: advanceTo.node_label } : null,
       programme_complete: !advanceTo
     });
@@ -369,6 +377,7 @@ function handleCheckResult({ res, session, result, learnerResponse, pendingCheck
   res.json({
     result: 'loop', decision: 'LOOP', passed: false, score: evaluation.score,
     feedback: evaluation.feedbackForLearner, understanding_gaps: evaluation.understandingGaps,
+    graded_by: evaluation.gradedBy || 'llm_only', sandbox_result: evaluation.sandboxResult || null,
     message: result.message, next_approach: result.nextApproach, loop_count: session.loop_count + 1
   });
 }

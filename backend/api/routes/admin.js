@@ -86,4 +86,60 @@ router.get('/quality-report', (req, res) => {
   });
 });
 
+// ─── Cost / latency report ─────────────────────────────────────────────────────
+// Every callAI() call is logged to ai_call_log (see instructionEngine.js).
+// learner_turns counts DISTINCT turn_id — one row per orchestrator.processMessage()
+// call — so cost_per_learner_turn_usd is a real average, not a guess.
+// estimated_cost_usd is 0 unless GEMINI_INPUT_PRICE_PER_1K_USD /
+// GEMINI_OUTPUT_PRICE_PER_1K_USD are set in the environment: an honest "not
+// configured" rather than a fabricated number.
+router.get('/cost-report', (req, res) => {
+  const db = getDb();
+
+  const overall = db.prepare(`
+    SELECT
+      COUNT(*) as total_calls,
+      SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) as failed_calls,
+      SUM(prompt_tokens) as total_prompt_tokens,
+      SUM(completion_tokens) as total_completion_tokens,
+      SUM(total_tokens) as total_tokens,
+      SUM(estimated_cost_usd) as total_estimated_cost_usd,
+      AVG(latency_ms) as avg_latency_ms,
+      COUNT(DISTINCT CASE WHEN turn_id IS NOT NULL THEN turn_id END) as learner_turns
+    FROM ai_call_log
+    WHERE created_at >= datetime('now', ?)
+  `).get(`-${parseInt(req.query.days, 10) || 30} days`);
+
+  const byBrain = db.prepare(`
+    SELECT brain,
+      COUNT(*) as calls,
+      SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) as failed_calls,
+      SUM(total_tokens) as total_tokens,
+      SUM(estimated_cost_usd) as estimated_cost_usd,
+      AVG(latency_ms) as avg_latency_ms
+    FROM ai_call_log
+    WHERE created_at >= datetime('now', ?)
+    GROUP BY brain ORDER BY total_tokens DESC
+  `).all(`-${parseInt(req.query.days, 10) || 30} days`);
+
+  db.close();
+
+  const learnerTurns = overall.learner_turns || 0;
+  res.json({
+    window_days: parseInt(req.query.days, 10) || 30,
+    pricing_configured: parseFloat(process.env.GEMINI_INPUT_PRICE_PER_1K_USD || '0') > 0
+      || parseFloat(process.env.GEMINI_OUTPUT_PRICE_PER_1K_USD || '0') > 0,
+    total_calls: overall.total_calls || 0,
+    failed_calls: overall.failed_calls || 0,
+    total_prompt_tokens: overall.total_prompt_tokens || 0,
+    total_completion_tokens: overall.total_completion_tokens || 0,
+    total_tokens: overall.total_tokens || 0,
+    total_estimated_cost_usd: overall.total_estimated_cost_usd || 0,
+    avg_latency_ms: overall.avg_latency_ms || 0,
+    learner_turns: learnerTurns,
+    cost_per_learner_turn_usd: learnerTurns > 0 ? (overall.total_estimated_cost_usd || 0) / learnerTurns : null,
+    by_brain: byBrain
+  });
+});
+
 module.exports = router;

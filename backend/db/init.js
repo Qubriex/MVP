@@ -214,6 +214,8 @@ function initDb() {
       passed INTEGER,               -- 1 = advance, 0 = loop, NULL = pending
       score REAL,                   -- 0.0 to 1.0
       ai_evaluation TEXT,           -- AI's evaluation reasoning
+      graded_by TEXT DEFAULT 'llm_only' CHECK(graded_by IN ('llm_only','sandbox')),
+      sandbox_result TEXT,          -- JSON: {testsRun, testsPassed, details[]} — only set when graded_by='sandbox'
       evaluated_at TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -368,6 +370,24 @@ function initDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- ─── CODE CHALLENGES — hidden-test-case grading for Python/SQL nodes ────
+    -- Keyed by concept_tag (same tagging cultBrain.getConceptTag() derives
+    -- from a node label), not skill_node_id, so one seeded challenge covers
+    -- every node across every engagement that teaches that concept — the
+    -- same retrieval pattern cultural_knowledge_base uses.
+    CREATE TABLE IF NOT EXISTS code_challenges (
+      id TEXT PRIMARY KEY,
+      concept_tag TEXT NOT NULL,
+      language TEXT NOT NULL CHECK(language IN ('python','sql')),
+      prompt TEXT NOT NULL,           -- exact task description — TEACH must reuse this verbatim in the check question
+      function_name TEXT,             -- python only: the function name hidden tests call
+      sql_fixture TEXT,               -- sql only: CREATE TABLE + INSERT statements for a scratch in-memory DB
+      hidden_tests TEXT NOT NULL,     -- JSON array: python -> [{args, expected}], sql -> [{expected_rows}]
+      timeout_ms INTEGER DEFAULT 5000,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(concept_tag, language)
+    );
+
     -- ─── CURR — Curriculum Brain ────────────────────────────────────────────
     CREATE TABLE IF NOT EXISTS brief_store (
       id TEXT PRIMARY KEY,
@@ -406,12 +426,41 @@ function initDb() {
       processing_ms INTEGER,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    -- ─── AI CALL LOG — every callAI() invocation, for cost/latency instrumentation ─
+    -- turn_id groups every brain call made within one learner-turn (one
+    -- orchestrator.processMessage() invocation), so cost-per-learner-turn is
+    -- a GROUP BY turn_id query rather than a guess.
+    CREATE TABLE IF NOT EXISTS ai_call_log (
+      id TEXT PRIMARY KEY,
+      brain TEXT NOT NULL,            -- TEACH | EVAL | CULT | CURR | ORCH
+      turn_id TEXT,
+      session_id TEXT,
+      learner_id TEXT,
+      node_id TEXT,
+      model TEXT NOT NULL,
+      prompt_tokens INTEGER,
+      completion_tokens INTEGER,
+      total_tokens INTEGER,
+      estimated_cost_usd REAL,
+      latency_ms INTEGER NOT NULL,
+      error TEXT,                     -- set when the call failed — prompt/completion tokens are NULL
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // ─── Lightweight migrations (no framework — SQLite has no ADD COLUMN IF NOT EXISTS) ─
   const learnerColumns = db.prepare("PRAGMA table_info(learners)").all().map(c => c.name);
   if (!learnerColumns.includes('pin_hash')) {
     db.exec('ALTER TABLE learners ADD COLUMN pin_hash TEXT');
+  }
+
+  const masteryCheckColumns = db.prepare("PRAGMA table_info(mastery_checks)").all().map(c => c.name);
+  if (!masteryCheckColumns.includes('graded_by')) {
+    db.exec("ALTER TABLE mastery_checks ADD COLUMN graded_by TEXT DEFAULT 'llm_only'");
+  }
+  if (!masteryCheckColumns.includes('sandbox_result')) {
+    db.exec('ALTER TABLE mastery_checks ADD COLUMN sandbox_result TEXT');
   }
 
   console.log('Qubirex database initialised at:', DB_PATH);

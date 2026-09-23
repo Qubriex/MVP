@@ -4,6 +4,8 @@
 // history (MEM), and node specifications (CURR). Never invents cultural
 // examples when retrieval returns results.
 const { callAI, safeParseJSON } = require('../instructionEngine');
+const { getConceptTag } = require('./cultBrain');
+const codeChallengeStore = require('../stores/codeChallengeStore');
 
 // ─── LANGUAGE_CONTEXTS ─────────────────────────────────────────────────────────
 const LANGUAGE_CONTEXTS = {
@@ -74,6 +76,17 @@ Mastery threshold: ${nodeSpec.mastery_threshold ?? 0.70}
 Phase: ${nodeSpec.phase ?? 1} | Difficulty: ${nodeSpec.difficulty_level ?? 1}/5 | Est. time: ${nodeSpec.estimated_minutes ?? 20} min`;
 }
 
+// A code_challenges entry exists for this node's concept — the mastery
+// check, if this turn issues one, is graded by actually running the
+// learner's submission (see evalBrain.js), so the question MUST ask for
+// exactly this task, not a paraphrase, or the hidden tests will be grading
+// something the learner was never asked to build.
+function formatCodeChallengeContext(nodeLabel) {
+  const challenge = codeChallengeStore.getChallengeForConceptTag(getConceptTag(nodeLabel));
+  if (!challenge) return '';
+  return `\nCODE CHALLENGE FOR THIS NODE — if you set decision to CHECK, checkQuestion MUST be exactly this task (translate/frame the surrounding sentence in the learner's language if helpful, but do not change the required function name, inputs, or behaviour): "${challenge.prompt}"\n`;
+}
+
 function formatHistory(conversationHistory = []) {
   return conversationHistory.slice(-6)
     .map(m => `${m.role === 'ai' ? 'Professor Qubirex' : 'Learner'}: ${m.content}`)
@@ -81,7 +94,7 @@ function formatHistory(conversationHistory = []) {
 }
 
 // ─── runDiagnosis() ─────────────────────────────────────────────────────────────
-async function runDiagnosis({ nodeLabel, clusterLabel, language, learnerContext = {} }) {
+async function runDiagnosis({ nodeLabel, clusterLabel, language, learnerContext = {}, meta = {} }) {
   const ctx = LANGUAGE_CONTEXTS[language];
   const struggles = learnerContext.nodeStruggles || [];
   const struggleHint = struggles.length
@@ -99,7 +112,7 @@ Respond ONLY with JSON:
   "behaviourSignal": "engaged"
 }`;
 
-  const text = await callAI({ system, userMessage: `Begin the diagnosis for "${nodeLabel}".`, maxTokens: 1024, temperature: 0.7 });
+  const text = await callAI({ system, userMessage: `Begin the diagnosis for "${nodeLabel}".`, maxTokens: 1024, temperature: 0.7, meta: { ...meta, brain: 'TEACH' } });
   return safeParseJSON(text, { message: text, decision: 'DIAGNOSE', behaviourSignal: 'engaged' });
 }
 
@@ -107,7 +120,7 @@ Respond ONLY with JSON:
 async function generateInstruction({
   nodeLabel, clusterLabel, language, approach = 'native_concept',
   approachesAlreadyUsed = [], conversationHistory = [], loopCount = 0,
-  behaviourSignal = 'engaged', learnerContext = {}, culturalExamples = [], nodeSpec = null
+  behaviourSignal = 'engaged', learnerContext = {}, culturalExamples = [], nodeSpec = null, meta = {}
 }) {
   const ctx = LANGUAGE_CONTEXTS[language];
   const approachGuide = (APPROACH_GUIDES[approach] || APPROACH_GUIDES.native_concept)(ctx.region);
@@ -123,7 +136,7 @@ ${formatCulturalContext(culturalExamples)}
 ${formatMemoryContext(learnerContext, loopCount)}
 
 ${formatNodeSpecContext(nodeSpec)}
-
+${formatCodeChallengeContext(nodeLabel)}
 BEHAVIOUR GUIDANCE: ${behaviourGuidance}
 
 SYSTEM PROMPT RULES:
@@ -155,7 +168,7 @@ Respond ONLY with JSON:
     ? conversationHistory[conversationHistory.length - 1].content
     : `Begin teaching "${nodeLabel}" using the ${approach} approach.`;
 
-  const text = await callAI({ system, userMessage: lastMessage, maxTokens: 2048, temperature: 0.7 });
+  const text = await callAI({ system, userMessage: lastMessage, maxTokens: 2048, temperature: 0.7, meta: { ...meta, brain: 'TEACH' } });
   return safeParseJSON(text, {
     message: text, decision: 'CONTINUE', checkQuestion: null, mermaid: null, code: null,
     behaviourSignal: 'engaged', approachesUsed: [approach], culturalExampleUsed: null
@@ -163,7 +176,7 @@ Respond ONLY with JSON:
 }
 
 // ─── answerDoubt() ──────────────────────────────────────────────────────────────
-async function answerDoubt({ questionText, nodeLabel, clusterLabel, language, learnerContext = {}, culturalExamples = [] }) {
+async function answerDoubt({ questionText, nodeLabel, clusterLabel, language, learnerContext = {}, culturalExamples = [], meta = {} }) {
   const ctx = LANGUAGE_CONTEXTS[language];
 
   const system = `You are Professor Qubirex. The learner has raised a doubt while working on "${nodeLabel}" (cluster: "${clusterLabel}"). Answer in ${ctx.lang_name}. ${ctx.script_note}.
@@ -178,7 +191,7 @@ Respond ONLY with JSON:
   "approach_used": "brief description of the angle taken"
 }`;
 
-  const text = await callAI({ system, userMessage: questionText, maxTokens: 1200, temperature: 0.7 });
+  const text = await callAI({ system, userMessage: questionText, maxTokens: 1200, temperature: 0.7, meta: { ...meta, brain: 'TEACH' } });
   return safeParseJSON(text, { answer: text, approach_used: 'direct_answer' });
 }
 

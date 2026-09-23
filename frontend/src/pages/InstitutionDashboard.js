@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { MOCK_ENGAGEMENTS } from '../utils/mockData';
+import { MOCK_FALLBACK_ALLOWED } from '../utils/devFallback';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 import Reveal from '../components/Reveal';
@@ -15,6 +16,7 @@ export default function InstitutionDashboard() {
   const navigate = useNavigate();
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     api.get('/institution/engagements')
@@ -24,7 +26,11 @@ export default function InstitutionDashboard() {
         if (!Array.isArray(r.data)) throw new Error('unexpected response shape');
         setEngagements(r.data); setLoading(false);
       })
-      .catch(() => { setEngagements(MOCK_ENGAGEMENTS); setLoading(false); });
+      .catch(() => {
+        if (MOCK_FALLBACK_ALLOWED) { setEngagements(MOCK_ENGAGEMENTS); }
+        else { setError('Could not load engagements. Please try again shortly.'); }
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -50,7 +56,8 @@ export default function InstitutionDashboard() {
         </div>
 
         <h2 style={{ marginBottom: 'var(--space-5)' }}>Active Engagements</h2>
-        {loading ? <p className="text-muted">Loading…</p> : (
+        {error && <div className="badge badge-danger" style={{ display: 'block', padding: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>{error}</div>}
+        {loading ? <p className="text-muted">Loading…</p> : error ? null : (
           engagements.length === 0
             ? <EmptyState onStart={() => navigate('/institution/upload-target')} />
             : <div className="stack gap-3">

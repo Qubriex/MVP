@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import { MOCK_LEARNER_DASHBOARD, MOCK_MASTERY_RECORD } from '../utils/mockData';
+import { MOCK_FALLBACK_ALLOWED } from '../utils/devFallback';
 import NavBar from '../components/NavBar';
 import Reveal from '../components/Reveal';
 
@@ -12,16 +13,20 @@ export default function LearnerDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [mastery, setMastery] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     // dev fallback — an unreachable backend can resolve with a 200 HTML page
     // (SPA host rewrite) instead of erroring, so validate the shape too
     api.get('/learner/dashboard')
       .then(r => { if (!r.data || typeof r.data.progress_pct === 'undefined') throw new Error('unexpected response shape'); setData(r.data); })
-      .catch(() => setData(MOCK_LEARNER_DASHBOARD));
+      .catch(() => {
+        if (MOCK_FALLBACK_ALLOWED) setData(MOCK_LEARNER_DASHBOARD);
+        else setError('Could not load your dashboard. Please try again shortly.');
+      });
     api.get('/learner/mastery-record')
       .then(r => { if (!Array.isArray(r.data)) throw new Error('unexpected response shape'); setMastery(r.data); })
-      .catch(() => setMastery(MOCK_MASTERY_RECORD));
+      .catch(() => { if (MOCK_FALLBACK_ALLOWED) setMastery(MOCK_MASTERY_RECORD); });
   }, []);
 
   const langName = { hindi: 'हिंदी', telugu: 'తెలుగు' };
@@ -41,6 +46,8 @@ export default function LearnerDashboard() {
       <main className="container" style={{ padding: 'var(--space-12) var(--gutter) var(--space-20)', flex: 1, width: '100%' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
           <Reveal><h1>{user?.language === 'hindi' ? 'नमस्ते' : 'నమస్కారం'}, {user?.name}</h1></Reveal>
+
+          {error && <div className="badge badge-danger" style={{ display: 'block', padding: 'var(--space-3)', margin: 'var(--space-4) 0' }}>{error}</div>}
 
           {data && (
             <>

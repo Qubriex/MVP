@@ -82,13 +82,34 @@ function produceLearnerMasteryLog(engagementId, learnerId) {
         ORDER BY mc.created_at
       `).all(learner.el_id, node.id);
 
+      // ─── Assessment evidence ──────────────────────────────────────────────
+      // A node whose mastery check ran against hidden test cases (Python/SQL,
+      // via evalBrain's sandbox path) is verifiable independently of the AI
+      // that taught it. A node with no such check is still AI-evaluated only
+      // — this field exists so that distinction is visible in the log itself,
+      // not just in a database column nobody reads.
+      const sandboxGradedChecks = checkResults.filter(c => c.graded_by === 'sandbox');
+      const assessmentMethod = sandboxGradedChecks.length > 0
+        ? 'sandbox_verified'
+        : (checkResults.length > 0 ? 'ai_evaluated' : 'not_attempted');
+      const finalSandboxCheck = sandboxGradedChecks.find(c => c.passed) || sandboxGradedChecks[sandboxGradedChecks.length - 1] || null;
+      let sandboxEvidence = null;
+      if (finalSandboxCheck && finalSandboxCheck.sandbox_result) {
+        try {
+          const r = JSON.parse(finalSandboxCheck.sandbox_result);
+          sandboxEvidence = { tests_run: r.testsRun, tests_passed: r.testsPassed };
+        } catch { /* malformed JSON from a legacy row — leave evidence null rather than throw */ }
+      }
+
       nodeLogs.push({
         skill_node: node.node_label,
         mastery_attainment: masteryRecord ? Math.round((masteryRecord.mastery_attainment || 0) * 100) : null,
         time_to_mastery_minutes: masteryRecord ? Math.round(masteryRecord.time_to_mastery_minutes || 0) : null,
         attempt_count: masteryRecord ? (masteryRecord.attempt_count || 0) : (checkResults.length || 0),
         confidence_indicator: confidenceLabel(masteryRecord ? masteryRecord.confidence_indicator || 0 : 0, !!masteryRecord),
-        advanced: !!(masteryRecord && masteryRecord.advanced_at)
+        advanced: !!(masteryRecord && masteryRecord.advanced_at),
+        assessment_method: assessmentMethod,
+        sandbox_evidence: sandboxEvidence
       });
     }
 
