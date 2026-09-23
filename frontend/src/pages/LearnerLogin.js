@@ -9,6 +9,7 @@ import Reveal from '../components/Reveal';
 export default function LearnerLogin() {
   const [ref, setRef] = useState('');
   const [engagementId, setEngagementId] = useState('');
+  const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -18,11 +19,11 @@ export default function LearnerLogin() {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      const res = await api.post('/auth/learner/login', { learner_ref: ref, engagement_id: engagementId });
+      const res = await api.post('/auth/learner/login', { learner_ref: ref, engagement_id: engagementId, pin });
       login(res.data.token, res.data.learner, 'learner');
       navigate('/learn/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Check your learner reference and engagement ID.');
+      setError(err.response?.data?.error || 'Login failed. Check your learner reference, engagement ID, and PIN.');
     }
     setLoading(false);
   };
@@ -45,6 +46,10 @@ export default function LearnerLogin() {
             <div className="field">
               <label className="label">Engagement ID</label>
               <input className="input" value={engagementId} onChange={e => setEngagementId(e.target.value)} placeholder="Provided by your institution" required />
+            </div>
+            <div className="field">
+              <label className="label">PIN</label>
+              <input className="input" type="password" inputMode="numeric" maxLength={6} value={pin} onChange={e => setPin(e.target.value)} placeholder="6-digit PIN from your institution" required />
             </div>
             <button className="btn btn-primary btn-block" type="submit" disabled={loading} style={{ marginTop: 'var(--space-8)' }}>
               {loading ? 'Entering…' : 'Enter Learning Space'}

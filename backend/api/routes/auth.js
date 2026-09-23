@@ -52,11 +52,15 @@ router.post('/institution/register', (req, res) => {
   res.status(201).json({ message: 'Institution registered successfully', id });
 });
 
-// ─── Learner login (via learner_ref + engagement code) ───────────────────────
+// ─── Learner login (learner_ref + engagement code + PIN) ─────────────────────
+// engagement_id and learner_ref are both distributed to a whole cohort, so
+// neither is a secret on its own — pin is the factor that makes this a real
+// login rather than "anyone who knows the engagement ID can read anyone
+// else's private doubts and session history."
 router.post('/learner/login', (req, res) => {
-  const { learner_ref, engagement_id } = req.body;
-  if (!learner_ref || !engagement_id) {
-    return res.status(400).json({ error: 'Learner reference and engagement ID required' });
+  const { learner_ref, engagement_id, pin } = req.body;
+  if (!learner_ref || !engagement_id || !pin) {
+    return res.status(400).json({ error: 'Learner reference, engagement ID, and PIN required' });
   }
 
   const db = getDb();
@@ -71,6 +75,9 @@ router.post('/learner/login', (req, res) => {
   db.close();
 
   if (!data) return res.status(401).json({ error: 'Learner not found in this engagement' });
+  if (!data.pin_hash || !bcrypt.compareSync(pin, data.pin_hash)) {
+    return res.status(401).json({ error: 'Invalid PIN' });
+  }
 
   const token = jwt.sign(
     { id: data.id, el_id: data.el_id, engagement_id, role: 'learner', language: data.language },

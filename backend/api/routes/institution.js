@@ -1,5 +1,7 @@
 // api/routes/institution.js — Institution Portal
 const express = require('express');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../../db/init');
 const { authenticateToken, requireRole } = require('../middleware/auth');
@@ -10,6 +12,15 @@ const { produceEngagementMasteryLogs } = require('../../core/masteryLog');
 const router = express.Router();
 router.use(authenticateToken);
 router.use(requireRole('institution', 'admin'));
+
+// A 6-digit login PIN, distributed to the learner alongside their engagement
+// ID. This is the secret factor: engagement_id is shared across a whole
+// cohort, so it alone can never be sufficient to authenticate one learner.
+// The plaintext PIN is returned exactly once, in the creation response —
+// only its bcrypt hash is ever persisted.
+function generatePin() {
+  return String(crypto.randomInt(100000, 1000000));
+}
 
 // ─── GET institution profile ──────────────────────────────────────────────────
 router.get('/profile', (req, res) => {
@@ -36,12 +47,14 @@ router.post('/learners', (req, res) => {
   }
   const db = getDb();
   const id = uuidv4();
+  const pin = generatePin();
+  const pin_hash = bcrypt.hashSync(pin, 10);
   db.prepare(`
-    INSERT INTO learners (id, institution_id, name, email, learner_ref, language, profile_type, current_capability_level)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.user.id, name, email, learner_ref, language, profile_type, current_capability_level);
+    INSERT INTO learners (id, institution_id, name, email, learner_ref, pin_hash, language, profile_type, current_capability_level)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, req.user.id, name, email, learner_ref, pin_hash, language, profile_type, current_capability_level);
   db.close();
-  res.status(201).json({ id, message: 'Learner added' });
+  res.status(201).json({ id, pin, message: 'Learner added — share this PIN with the learner now, it will not be shown again' });
 });
 
 // ─── Bulk add learners ────────────────────────────────────────────────────────
@@ -50,15 +63,17 @@ router.post('/learners/bulk', (req, res) => {
   if (!Array.isArray(learners)) return res.status(400).json({ error: 'learners array required' });
   const db = getDb();
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO learners (id, institution_id, name, email, learner_ref, language, profile_type)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO learners (id, institution_id, name, email, learner_ref, pin_hash, language, profile_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const insertMany = db.transaction((rows) => rows.forEach(l =>
-    insert.run(uuidv4(), req.user.id, l.name, l.email || null, l.learner_ref, l.language || 'telugu', l.profile_type || 'college_student')
-  ));
-  insertMany(learners);
+  const results = db.transaction((rows) => rows.map(l => {
+    const pin = generatePin();
+    const info = insert.run(uuidv4(), req.user.id, l.name, l.email || null, l.learner_ref, bcrypt.hashSync(pin, 10), l.language || 'telugu', l.profile_type || 'college_student');
+    // insert.run() was OR IGNORE — a duplicate learner_ref means no PIN was actually set
+    return info.changes === 0 ? { learner_ref: l.learner_ref, skipped: true } : { learner_ref: l.learner_ref, pin };
+  }))(learners);
   db.close();
-  res.status(201).json({ message: `${learners.length} learners processed` });
+  res.status(201).json({ message: `${learners.length} learners processed`, learners: results });
 });
 
 // ─── Upload / submit capability target (Path A / Path B) ─────────────────────

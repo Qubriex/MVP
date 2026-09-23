@@ -14,6 +14,8 @@ export default function EngagementSetup() {
   const [learners, setLearners] = useState([{ name: '', learner_ref: '', email: '' }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [credentials, setCredentials] = useState(null); // [{learner_ref, pin}] shown once, then the engagement is created
+  const [pendingEngagement, setPendingEngagement] = useState(null);
 
   const addLearner = () => setLearners([...learners, { name: '', learner_ref: '', email: '' }]);
   const updateLearner = (i, field, val) => {
@@ -24,20 +26,30 @@ export default function EngagementSetup() {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      // Register learners first
-      await api.post('/institution/learners/bulk', {
+      // Register learners first — each response entry carries a one-time PIN
+      // (the secret login factor) that must be shown to the institution now,
+      // since it is never retrievable again after this response.
+      const bulkRes = await api.post('/institution/learners/bulk', {
         learners: learners.filter(l => l.name && l.learner_ref).map(l => ({ ...l, language }))
       });
+      setCredentials(bulkRes.data.learners || []);
+      setPendingEngagement({ title, language });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Setup failed');
+    }
+    setLoading(false);
+  };
 
-      // Fetch learner IDs
+  const finishSetup = async () => {
+    setLoading(true); setError('');
+    try {
       const allLearners = await api.get('/institution/learners');
       const refSet = new Set(learners.map(l => l.learner_ref));
       const learnerIds = allLearners.data.filter(l => refSet.has(l.learner_ref)).map(l => l.id);
 
-      // Create engagement
       const engRes = await api.post('/institution/engagements', {
         capability_target_id: capabilityTargetId,
-        title, language, learner_ids: learnerIds
+        title: pendingEngagement.title, language: pendingEngagement.language, learner_ids: learnerIds
       });
       navigate(`/institution/engagement/${engRes.data.engagement_id}`);
     } catch (err) {
@@ -45,6 +57,35 @@ export default function EngagementSetup() {
     }
     setLoading(false);
   };
+
+  if (credentials) {
+    return (
+      <>
+        <NavBar />
+        <main className="container" style={{ padding: 'var(--space-12) var(--gutter) var(--space-20)', flex: 1, width: '100%' }}>
+          <div style={{ maxWidth: 700, margin: '0 auto' }}>
+            <Reveal><h1 style={{ marginBottom: 'var(--space-2)' }}>Learner Credentials</h1></Reveal>
+            <p className="small text-muted" style={{ marginBottom: 'var(--space-6)' }}>
+              Each learner needs their reference, the engagement ID, and this PIN to log in. Share these securely now —
+              PINs cannot be retrieved again after you leave this page (an institution admin can only reset them, not view them).
+            </p>
+            <div className="card" style={{ padding: 'var(--space-5)', marginBottom: 'var(--space-6)' }}>
+              {credentials.map(c => (
+                <div key={c.learner_ref} className="row gap-3" style={{ justifyContent: 'space-between', padding: 'var(--space-2) 0', borderBottom: '1px solid var(--color-border)' }}>
+                  <span>{c.learner_ref}</span>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{c.skipped ? 'already exists — PIN unchanged' : c.pin}</span>
+                </div>
+              ))}
+            </div>
+            {error && <div className="badge badge-danger" style={{ display: 'block', padding: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>{error}</div>}
+            <button className="btn btn-primary btn-block" onClick={finishSetup} disabled={loading}>
+              {loading ? 'Starting…' : 'I’ve saved these — Start Engagement →'}
+            </button>
+          </div>
+        </main>
+      </>
+    );
+  }
 
   return (
     <>

@@ -17,6 +17,7 @@ function getDb() {
   const db = new Database(path.resolve(DB_PATH));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
   return db;
 }
 
@@ -62,6 +63,7 @@ function initDb() {
       name TEXT NOT NULL,
       email TEXT,
       learner_ref TEXT NOT NULL,
+      pin_hash TEXT,                 -- secret login factor, set at creation; never returned after
       language TEXT NOT NULL CHECK(language IN ('hindi','telugu')),
       profile_type TEXT CHECK(profile_type IN (
         'college_student','working_professional','bootcamp_participant',
@@ -405,6 +407,12 @@ function initDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
+
+  // ─── Lightweight migrations (no framework — SQLite has no ADD COLUMN IF NOT EXISTS) ─
+  const learnerColumns = db.prepare("PRAGMA table_info(learners)").all().map(c => c.name);
+  if (!learnerColumns.includes('pin_hash')) {
+    db.exec('ALTER TABLE learners ADD COLUMN pin_hash TEXT');
+  }
 
   console.log('Qubirex database initialised at:', DB_PATH);
   db.close();
